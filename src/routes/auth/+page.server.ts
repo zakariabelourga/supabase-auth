@@ -72,8 +72,12 @@ export const actions: Actions = {
         return fail(400, { message: 'Email is required.', values: { email } })
     }
 
+    // Construct the URL for the callback endpoint, including the final destination
+    const redirectUrl = new URL('/auth/callback', url.origin);
+    redirectUrl.searchParams.set('next', '/auth/update-password'); // Specify where to go after successful OTP verification
+
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${url.origin}/auth/callback`,
+        redirectTo: redirectUrl.toString(), // Use the full constructed URL
       })
 
     if (error) {

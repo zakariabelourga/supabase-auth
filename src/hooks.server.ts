@@ -73,17 +73,27 @@ const authGuard: Handle = async ({ event, resolve }) => {
   const protectedPaths = ['/private'] // Add any other paths you want to protect
   const isProtectedRoute = protectedPaths.some(path => event.url.pathname.startsWith(path))
 
-  // Define auth path
-  const authPath = '/auth'
+  // Define auth path prefix and specific auth routes allowed even when logged in
+  const authPathPrefix = '/auth'
+  const allowedAuthRoutesWhenLoggedIn = [
+    '/auth/confirm', 
+    '/auth/update-password'
+    // Add /auth/logout or other necessary routes here if applicable
+  ]
 
   if (!event.locals.session && isProtectedRoute) {
-    // If not logged in and trying to access a protected route, redirect to auth
-    redirect(303, authPath)
+    // If not logged in and trying to access a protected route, redirect to the main auth page (or login)
+    redirect(303, authPathPrefix) // Or keep as authPathPrefix if /auth is your main entry
   }
 
-  if (event.locals.session && event.url.pathname.startsWith(authPath)) {
-    // If logged in and trying to access auth route, redirect to a default private page (e.g., /private)
-    redirect(303, '/private') // Adjust the redirect path as needed
+  // Check if the user is logged in AND trying to access an auth route
+  if (event.locals.session && event.url.pathname.startsWith(authPathPrefix)) {
+    // Check if the specific auth route is one that should NOT be accessed when logged in (e.g., login, signup)
+    if (!allowedAuthRoutesWhenLoggedIn.includes(event.url.pathname)) {
+      // If logged in and trying to access a non-allowed auth route, redirect to /private
+      redirect(303, '/private') // Adjust the redirect path as needed
+    }
+    // Otherwise, allow access to routes like /auth/update-password even if logged in
   }
 
   return resolve(event)

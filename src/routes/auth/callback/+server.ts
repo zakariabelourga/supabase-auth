@@ -27,25 +27,29 @@ export const GET: RequestHandler = async ({ url, locals: { supabase } }: { url: 
   }
   // Handle Email link verification (signup, recovery, invite, magiclink, email_change)
   else if (token_hash && type) {
+    // For password reset, redirect to update-password page with token
+    // This is now handled by /auth/confirm based on the updated email template
+    /* 
+    if (type === 'recovery') {
+      const updatePasswordUrl = new URL('/auth/update-password', url.origin)
+      updatePasswordUrl.searchParams.set('token_hash', token_hash)
+      redirect(303, updatePasswordUrl)
+    }
+    */
+
     const { error } = await supabase.auth.verifyOtp({ type, token_hash })
     if (!error) {
-       // If the type is recovery (password reset), redirect to the update password page
-       if (type === 'recovery') {
-         redirectTo.pathname = '/auth/update-password';
-         redirect(303, redirectTo);
-       }
-       // For email change, we might handle differently or just redirect
-       if (type === 'email_change') {
-            // Optionally redirect to a specific page confirming email change
-            // or just back to the profile/settings page.
-            // For simplicity, redirecting back to `next` path defined earlier.
-       }
-      // For other successful OTP types (signup, magiclink, invite), redirect to 'next'
-      redirectTo.pathname = next // Use the original 'next' or default '/private'
+      // For email change, we need to exchange the code again
+      // Supabase doesn't automatically sign in the user on email change verification
+      if (type === 'email_change') {
+        // Optionally redirect to a specific page confirming email change
+        // or just back to the profile/settings page.
+        // For simplicity, redirecting back to `next` path.
+      }
       redirect(303, redirectTo)
     }
     console.error('Email verification error:', error?.message)
-     // Fall through to error redirect
+    // Fall through to error redirect
   }
 
   // Redirect to an error page if code/token is invalid or missing

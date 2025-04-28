@@ -1,61 +1,138 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
-	import type { ActionData } from './$types';
-	import { Button } from '$lib/components/ui/button';
-	import * as Card from '$lib/components/ui/card';
-	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import { AlertCircle } from '@lucide/svelte';
-	import { Alert, AlertDescription, AlertTitle } from '$lib/components/ui/alert';
+    import { goto } from '$app/navigation';
+    import { enhance } from '$app/forms'; // Optional: for progressive enhancement if using server actions
+    import type { PageData } from './$types';
 
-	export let form: ActionData;
-	let loading = false;
+    // Get Supabase client from layout data
+    let { data }: { data: PageData } = $props();
+    let { supabase } = $derived(data);
+
+    let password = $state('');
+    let confirmPassword = $state('');
+    let message = $state<string | null>(null);
+    let error = $state<string | null>(null);
+    let loading = $state(false);
+
+    async function handlePasswordUpdate(event: Event) {
+        event.preventDefault(); // Prevent default form submission
+        if (!supabase) {
+            error = 'Supabase client not available.';
+            return;
+        }
+        if (password !== confirmPassword) {
+            error = 'Passwords do not match.';
+            return;
+        }
+        if (password.length < 6) { // Basic validation, match Supabase default
+            error = 'Password must be at least 6 characters long.';
+            return;
+        }
+
+        loading = true;
+        error = null;
+        message = null;
+
+        const { error: updateError } = await supabase.auth.updateUser({
+            password: password,
+        });
+
+        loading = false;
+
+        if (updateError) {
+            console.error('Password update error:', updateError.message);
+            error = `Failed to update password: ${updateError.message}`;
+        } else {
+            message = 'Password updated successfully! Redirecting...';
+            // Clear sensitive fields
+            password = '';
+            confirmPassword = '';
+            // Redirect to a private page after successful update
+            setTimeout(() => {
+                goto('/private', { invalidateAll: true }); 
+            }, 2000); // Wait 2 seconds to show message
+        }
+    }
 </script>
 
-<div class="container mx-auto flex h-screen items-center justify-center px-4">
-	<Card.Root class="w-full max-w-md">
-		<Card.Header class="space-y-1 text-center">
-			<Card.Title class="text-2xl font-bold">Update Password</Card.Title>
-			<Card.Description>Enter your new password below.</Card.Description>
-		</Card.Header>
-		<Card.Content>
-			{#if form?.error}
-				<Alert variant="destructive" class="mb-4">
-					<AlertCircle class="h-4 w-4" />
-					<AlertTitle>Error</AlertTitle>
-					<AlertDescription>{form.error}</AlertDescription>
-				</Alert>
-			{/if}
-			{#if form?.success}
-				<Alert variant="default" class="mb-4 bg-green-100 text-green-800">
-					<AlertTitle>Success</AlertTitle>
-					<AlertDescription>
-                        Your password has been updated successfully.
-                        <a href="/auth" class="font-medium text-primary underline underline-offset-4">Go to Auth page</a>
-                    </AlertDescription>
-				</Alert>
-			{:else}
-				<form
-					method="POST"
-					action="?/updatePassword"
-					use:enhance={() => {
-						loading = true;
-						return async ({ update }) => {
-							await update();
-							loading = false;
-						};
-					}}
-					class="space-y-4"
-				>
-					<div class="space-y-2">
-						<Label for="password">New Password</Label>
-						<Input id="password" name="password" type="password" required disabled={loading} />
-					</div>
-					<Button type="submit" class="w-full" disabled={loading}>
-						{#if loading}Updating...{:else}Update Password{/if}
-					</Button>
-				</form>
-			{/if}
-		</Card.Content>
-	</Card.Root>
-</div> 
+<svelte:head>
+    <title>Update Password</title>
+</svelte:head>
+
+<div class="update-password-container">
+    <h1>Set Your New Password</h1>
+
+    {#if message}
+        <p class="message success">{message}</p>
+    {/if}
+    {#if error}
+        <p class="message error">{error}</p>
+    {/if}
+
+    <form onsubmit={handlePasswordUpdate}>
+        <label>
+            New Password:
+            <input type="password" bind:value={password} required minlength="6" />
+        </label>
+        <label>
+            Confirm New Password:
+            <input type="password" bind:value={confirmPassword} required minlength="6" />
+        </label>
+        <button type="submit" disabled={loading}>
+            {#if loading}Updating...{:else}Update Password{/if}
+        </button>
+    </form>
+</div>
+
+<style>
+    .update-password-container {
+        max-width: 400px;
+        margin: 2rem auto;
+        padding: 2rem;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+    }
+    form {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+    label {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    input {
+        width: 100%;
+        padding: 0.5rem;
+        margin-top: 0.25rem;
+        box-sizing: border-box;
+    }
+    button {
+        padding: 0.75rem;
+        cursor: pointer;
+        background-color: #333;
+        color: white;
+        border: none;
+        border-radius: 4px;
+    }
+    button:disabled {
+        background-color: #999;
+        cursor: not-allowed;
+    }
+    .message {
+        padding: 0.75rem;
+        border-radius: 4px;
+        margin-bottom: 1rem;
+    }
+    .message.success {
+        background-color: #e6fffa;
+        color: #2c7a7b;
+        border: 1px solid #b2f5ea;
+    }
+    .message.error {
+        background-color: #ffebeb;
+        color: #c53030;
+        border: 1px solid #fed7d7;
+    }
+</style> 
