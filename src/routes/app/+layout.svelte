@@ -24,7 +24,7 @@
             <a href="/">Home</a>
             {#if session}
                 <span>Logged in as: {session.user.email}</span>
-                <a href="/private/account">Account</a> <!-- Link to an example account page -->
+                <a href="/app/account">Account</a> <!-- Link to an example account page -->
                 <button onclick={handleLogout}>Logout</button>
             {/if}
         </nav>

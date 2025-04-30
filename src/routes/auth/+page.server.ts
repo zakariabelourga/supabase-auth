@@ -28,8 +28,8 @@ export const actions: Actions = {
       return fail(401, { message: 'Invalid credentials.', values: { email } })
     }
 
-    // Successful login, redirect to a protected route (e.g., /private)
-    redirect(303, '/private')
+    // Successful login, redirect to a protected route (e.g., /app)
+    redirect(303, '/app')
   },
   register: async ({ request, locals: { supabase }, url }: ActionEvent): ActionResult => {
     const formData = await request.formData()
@@ -62,7 +62,7 @@ export const actions: Actions = {
 
     // Registration successful (or requires email confirmation)
     // Redirect to a page indicating success or asking to check email
-    redirect(303, '/auth/check-email') // Or redirect directly to /private if email confirmation is off
+    redirect(303, '/auth/check-email') // Or redirect directly to /app if email confirmation is off
   },
   reset_password: async ({ request, locals: { supabase }, url }: ActionEvent): ActionResult => {
     const formData = await request.formData()

@@ -6,7 +6,7 @@ export const GET: RequestHandler = async ({ url, locals: { supabase } }: { url: 
   const code = url.searchParams.get('code')
   const token_hash = url.searchParams.get('token_hash')
   const type = url.searchParams.get('type') as EmailOtpType | null
-  const next = url.searchParams.get('next') ?? '/private' // Default redirect after success
+  const next = url.searchParams.get('next') ?? '/app' // Default redirect after success
 
   // Create a redirect URL that removes the auth params
   const redirectTo = new URL(url)

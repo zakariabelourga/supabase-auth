@@ -14,7 +14,7 @@
     <p>You are successfully logged in.</p>
     
     <p>Manage your account details:</p>
-    <a href="/private/account">Go to Account Page</a>
+    <a href="/app/account">Go to Account Page</a>
 </div>
 
 <style>

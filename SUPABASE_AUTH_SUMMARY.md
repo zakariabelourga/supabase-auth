@@ -54,7 +54,7 @@ Knowing if a user is authenticated and accessing their data is handled different
 
 *   **`src/hooks.server.ts`:**
     *   `supabase` handle: Initializes the server-side Supabase client for each request using cookies. Defines `event.locals.safeGetSession`.
-    *   `authGuard` handle: Runs after `supabase`. Checks authentication status using `safeGetSession()`. Redirects users based on their login status and the route they are trying to access (protects `/private`, redirects logged-in users away from non-essential `/auth` routes). Populates `event.locals.session` and `event.locals.user`.
+    *   `authGuard` handle: Runs after `supabase`. Checks authentication status using `safeGetSession()`. Redirects users based on their login status and the route they are trying to access (protects `/app`, redirects logged-in users away from non-essential `/auth` routes). Populates `event.locals.session` and `event.locals.user`.
     *   `sequence`: Ensures `supabase` runs before `authGuard`.
 *   **`src/routes/+layout.server.ts`:**
     *   Runs on the server for *every* route.
@@ -83,16 +83,16 @@ Knowing if a user is authenticated and accessing their data is handled different
     *   The page where users land after clicking a valid password reset link (via `/auth/confirm`).
     *   Users enter their new password here.
     *   The form submission calls `supabase.auth.updateUser({ password: newPassword })` to update the already authenticated user's password.
-*   **`src/routes/private/**`:**
+*   **`src/routes/app/**`:**
     *   Contains protected routes. Access is controlled by the `authGuard` in `hooks.server.ts`.
-    *   The empty `src/routes/private/+layout.ts` ensures these routes are dynamic and always run the server hooks.
+    *   The empty `src/routes/app/+layout.ts` ensures these routes are dynamic and always run the server hooks.
 
 ## Authentication Flows Summary
 
 1.  **Email/Password Login:**
     *   User submits email/password (`/auth/+page.svelte`).
     *   `login` action (`/auth/+page.server.ts`) calls `supabase.auth.signInWithPassword()`.
-    *   On success, Supabase sets cookies, and the action redirects to `/private`. Hooks handle session validation on subsequent requests.
+    *   On success, Supabase sets cookies, and the action redirects to `/app`. Hooks handle session validation on subsequent requests.
 2.  **Email/Password Signup:**
     *   User submits email/password (`/auth/+page.svelte`).
     *   `register` action (`/auth/+page.server.ts`) calls `supabase.auth.signUp()`.
@@ -114,7 +114,7 @@ Knowing if a user is authenticated and accessing their data is handled different
     *   User authenticates with provider.
     *   Provider redirects back to `/auth/callback?code=...`.
     *   `GET` handler in `/auth/callback/+server.ts` exchanges the `code` for a session using `exchangeCodeForSession()`.
-    *   Redirects to `/private` on success.
+    *   Redirects to `/app` on success.
 
 ## Quick Check: Is User Logged In?
 
@@ -173,4 +173,4 @@ Here are some extra points to keep in mind when building features upon this auth
 
 7.  **Type Safety:** Continue using TypeScript and leverage the types inferred by SvelteKit (like `PageData`, `LayoutData`, `ActionData`) for better developer experience and fewer runtime errors.
 
-8.  **Logout Flow:** The logout button in `src/routes/private/+layout.svelte` correctly calls `supabase.auth.signOut()`. The `onAuthStateChange` listener in the root layout will then detect the session removal and trigger `invalidate('supabase:auth')`, which updates the UI and allows the `authGuard` hook to redirect the user if they try accessing protected routes again.
+8.  **Logout Flow:** The logout button in `src/routes/app/+layout.svelte` correctly calls `supabase.auth.signOut()`. The `onAuthStateChange` listener in the root layout will then detect the session removal and trigger `invalidate('supabase:auth')`, which updates the UI and allows the `authGuard` hook to redirect the user if they try accessing protected routes again.

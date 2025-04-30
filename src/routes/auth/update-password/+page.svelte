@@ -48,7 +48,7 @@
             confirmPassword = '';
             // Redirect to a private page after successful update
             setTimeout(() => {
-                goto('/private', { invalidateAll: true }); 
+                goto('/app', { invalidateAll: true }); 
             }, 2000); // Wait 2 seconds to show message
         }
     }

@@ -19,7 +19,7 @@ Use the `.insert()` method.
 **Example: Adding a new Item (Server-Side Action in `+page.server.ts`)**
 
 ```typescript
-// src/routes/private/items/+page.server.ts (Example)
+// src/routes/app/items/+page.server.ts (Example)
 import { fail, type Actions, redirect } from '@sveltejs/kit'
 import type { RequestEvent } from '@sveltejs/kit'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -65,7 +65,7 @@ export const actions: Actions = {
 
     console.log('Item added:', data);
     // Redirect or return success
-    redirect(303, '/private/items'); // Redirect to items list for example
+    redirect(303, '/app/items'); // Redirect to items list for example
   },
 };
 ```
@@ -109,7 +109,7 @@ Use the `.select()` method. You can specify columns and apply filters.
 **Example: Loading User's Items (Server-Side `load` in `+page.server.ts`)**
 
 ```typescript
-// src/routes/private/items/+page.server.ts
+// src/routes/app/items/+page.server.ts
 import type { PageServerLoad } from './$types'
 import { error as svelteKitError, redirect } from '@sveltejs/kit'
 
@@ -220,7 +220,7 @@ Use the `.update()` method combined with a filter like `.match()` or `.eq()` to 
 **Example: Updating an Item (Server-Side Action)**
 
 ```typescript
-// In actions object of src/routes/private/items/[itemId]/+page.server.ts (Example)
+// In actions object of src/routes/app/items/[itemId]/+page.server.ts (Example)
   updateItem: async ({ request, params, locals: { supabase, session } }: ActionEvent & { params: { itemId: string }}) => {
     if (!session) {
       return fail(401, { message: 'Unauthorized' })
@@ -252,7 +252,7 @@ Use the `.update()` method combined with a filter like `.match()` or `.eq()` to 
     }
 
     // Redirect or return success
-    redirect(303, '/private/items');
+    redirect(303, '/app/items');
   },
 ```
 
@@ -293,7 +293,7 @@ Use the `.delete()` method combined with a filter like `.match()` or `.eq()`.
     } else {
       alert('Item deleted successfully.');
       // Refresh list or navigate away
-      // Example: location.reload(); or goto('/private/items');
+      // Example: location.reload(); or goto('/app/items');
     }
   }
 </script>
