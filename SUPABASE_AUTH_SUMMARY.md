@@ -71,6 +71,7 @@ Knowing if a user is authenticated and accessing their data is handled different
     *   Renders child components (`{@render children()}`).
 *   **`src/routes/auth/+page.server.ts`:**
     *   Contains SvelteKit form actions (`login`, `register`, `reset_password`, `oauth_login`) that interact with `supabase.auth` methods.
+    *   The `register` action includes server-side validation to ensure the provided password and password confirmation match.
 *   **`src/routes/auth/callback/+server.ts`:**
     *   Handles the redirect callback for **OAuth** providers. Exchanges the `code` received from the provider for a user session using `supabase.auth.exchangeCodeForSession()`.
     *   Handles redirects for some other email link types (e.g., email change confirmation) *if* they are configured to point here. **Password Reset is NOT handled here anymore.**
@@ -90,14 +91,18 @@ Knowing if a user is authenticated and accessing their data is handled different
 ## Authentication Flows Summary
 
 1.  **Email/Password Login:**
-    *   User submits email/password (`/auth/+page.svelte`).
+    *   User interacts with the Sign In form (`/auth/+page.svelte`, when `isSignUp` state is `false`).
+    *   Submits email/password.
     *   `login` action (`/auth/+page.server.ts`) calls `supabase.auth.signInWithPassword()`.
     *   On success, Supabase sets cookies, and the action redirects to `/app`. Hooks handle session validation on subsequent requests.
 2.  **Email/Password Signup:**
-    *   User submits email/password (`/auth/+page.svelte`).
-    *   `register` action (`/auth/+page.server.ts`) calls `supabase.auth.signUp()`.
+    *   User interacts with the Sign Up form (`/auth/+page.svelte`, when `isSignUp` state is `true`).
+    *   Submits email, password, and password confirmation.
+    *   Client-side validation in the component checks if passwords match before submission.
+    *   `register` action (`/auth/+page.server.ts`) validates that passwords match on the server.
+    *   If validation passes, calls `supabase.auth.signUp()`.
     *   Redirects to `/auth/check-email`. (Email confirmation is likely enabled).
-    *   User clicks link in email -> `auth/confirm` (if template configured for PKCE) or `auth/callback` -> user logged in.
+    *   User clicks link in email -> `auth/confirm` (PKCE flow is configured) -> user logged in.
 3.  **Password Reset (PKCE Flow):**
     *   User requests reset (`/auth/+page.svelte`).
     *   `reset_password` action (`/auth/+page.server.ts`) calls `supabase.auth.resetPasswordForEmail()`, providing a `redirectTo` URL pointing to `/auth/confirm` with `next=/auth/update-password`.
