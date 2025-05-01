@@ -231,7 +231,195 @@ export const actions: Actions = {
 
 		// --- Success ---
 		redirect(303, '/app/items');
-	}
-    // Add deleteItem action later
-    // Optionally add addEntity action later
+	},
+
+    deleteItem: async ({ request, locals: { supabase, session } }: AuthenticatedEvent) => {
+        if (!session) {
+            return fail(401, { message: 'Unauthorized' });
+        }
+
+        const formData = await request.formData();
+        const itemId = formData.get('itemId') as string | null;
+
+        if (!itemId) {
+            return fail(400, { message: 'Missing item ID.' });
+        }
+
+        // Delete the item, ensuring it belongs to the current user
+        // Note: Related item_tags will be deleted automatically if ON DELETE CASCADE is set 
+        // on the item_tags.item_id foreign key constraint.
+        const { error } = await supabase
+            .from('items')
+            .delete()
+            .match({ id: itemId, user_id: session.user.id }); // Match user ID!
+
+        if (error) {
+            console.error('Error deleting item:', error);
+            return fail(500, {
+                message: `Database error deleting item: ${error.message}`,
+                deleteErrorId: itemId // Pass back ID for potential UI feedback
+            });
+        }
+
+        // Success - enhance handles UI update by reloading data
+        return { 
+            status: 200, // OK
+            message: 'Item deleted successfully.' 
+        };
+    },
+
+    updateItem: async ({ request, locals: { supabase, session } }: AuthenticatedEvent) => {
+        if (!session) {
+            return fail(401, { message: 'Unauthorized' });
+        }
+
+        const formData = await request.formData();
+        const itemId = formData.get('itemId') as string | null;
+        const name = formData.get('name') as string | null;
+        const description = formData.get('description') as string | null;
+        const categoryId = formData.get('categoryId') as string | null;
+        const expiration = formData.get('expiration') as string | null;
+        const tagsString = formData.get('tags') as string | null;
+        const entityNameManualInput = formData.get('entityNameManual') as string | null;
+
+        // --- Basic Validation ---
+        if (!itemId) {
+            return fail(400, { message: 'Missing item ID for update.', isUpdate: true });
+        }
+        if (!name || !expiration) {
+            return fail(400, {
+                message: 'Missing required fields: Name and Expiration Date are required.',
+                values: { itemId, name, description, categoryId, expiration, tagsString, entityNameManual: entityNameManualInput },
+                isUpdate: true
+            });
+        }
+
+        // --- Determine Entity ID and Manual Name (same logic as addItem) ---
+        let entityIdToSave: string | null = null;
+        let entityNameManualToSave: string | null = entityNameManualInput?.trim() || null;
+
+        if (entityNameManualToSave) {
+            const { data: matchingEntity } = await supabase
+                .from('entities')
+                .select('id')
+                .eq('user_id', session.user.id)
+                .eq('name', entityNameManualToSave)
+                .maybeSingle();
+            
+            if (matchingEntity) {
+                entityIdToSave = matchingEntity.id;
+                entityNameManualToSave = null;
+            }
+        }
+
+        // --- 1. Update Core Item Details ---
+        const { error: updateItemError } = await supabase
+            .from('items')
+            .update({
+                name: name,
+                description: description,
+                category_id: categoryId || null,
+                expiration: expiration,
+                entity_id: entityIdToSave,
+                entity_name_manual: entityNameManualToSave,
+                updated_at: new Date() // Explicitly set updated_at
+            })
+            .match({ id: itemId, user_id: session.user.id }); // Ensure user owns item
+
+        if (updateItemError) {
+            console.error('Error updating item details:', updateItemError);
+            return fail(500, {
+                message: `Database error updating item: ${updateItemError.message}`,
+                values: { itemId, name, description, categoryId, expiration, tagsString, entityNameManual: entityNameManualInput },
+                isUpdate: true
+            });
+        }
+
+        // --- 2. Handle Tag Updates ---
+        const newTagNames = 
+            tagsString
+                ?.split(',')
+                .map(tag => tag.trim())
+                .filter(tag => tag.length > 0) ?? [];
+
+        try {
+            // Get current tags for the item
+            const { data: currentItemTagsData, error: currentTagsError } = await supabase
+                .from('item_tags')
+                .select('tag_id, tags(name)') // Select name via join
+                .eq('item_id', itemId);
+
+            if (currentTagsError) throw currentTagsError;
+            
+            // Explicitly type the fetched data with casting
+            type CurrentItemTag = { tag_id: string; tags: { name: string } | null };
+            const currentTags = (currentItemTagsData as unknown as CurrentItemTag[]) || [];
+            
+            const currentTagNames = currentTags.map(ct => ct.tags?.name).filter(Boolean) as string[];
+            const currentTagMap = new Map(currentTags.map(ct => [ct.tags?.name, ct.tag_id]).filter(entry => entry[0] && entry[1]) as [string, string][]);
+
+            // --- Tags to Add ---
+            const tagsToAddNames = newTagNames.filter(name => !currentTagMap.has(name));
+            if (tagsToAddNames.length > 0) {
+                 // Find existing tags among the ones to add for this user
+                 const { data: existingTagsToAdd, error: findTagsErr } = await supabase
+                    .from('tags')
+                    .select('id, name')
+                    .eq('user_id', session.user.id)
+                    .in('name', tagsToAddNames);
+                if (findTagsErr) throw findTagsErr;
+
+                const existingTagsToAddMap = new Map(existingTagsToAdd.map(t => [t.name, t.id]));
+                let tagsToLinkIds = existingTagsToAdd.map(t => t.id);
+
+                // Identify truly new tags to be created
+                const tagsToCreateNames = tagsToAddNames.filter(name => !existingTagsToAddMap.has(name));
+                if (tagsToCreateNames.length > 0) {
+                    const { data: createdTags, error: createTagsErr } = await supabase
+                        .from('tags')
+                        .insert(tagsToCreateNames.map(name => ({ name, user_id: session.user.id })))
+                        .select('id');
+                    if (createTagsErr) throw createTagsErr;
+                    tagsToLinkIds = tagsToLinkIds.concat(createdTags.map(t => t.id));
+                }
+
+                // Link the added tags
+                if (tagsToLinkIds.length > 0) {
+                    const { error: linkTagsErr } = await supabase
+                        .from('item_tags')
+                        .insert(tagsToLinkIds.map(tagId => ({ item_id: itemId, tag_id: tagId })));
+                    if (linkTagsErr) throw linkTagsErr;
+                }
+            }
+
+            // --- Tags to Remove ---
+            const tagsToRemoveNames = currentTagNames.filter(name => !newTagNames.includes(name));
+            const tagsToRemoveIds = tagsToRemoveNames.map(name => currentTagMap.get(name)).filter(Boolean) as string[];
+
+            if (tagsToRemoveIds.length > 0) {
+                const { error: unlinkTagsErr } = await supabase
+                    .from('item_tags')
+                    .delete()
+                    .eq('item_id', itemId)
+                    .in('tag_id', tagsToRemoveIds);
+                if (unlinkTagsErr) throw unlinkTagsErr;
+            }
+
+        } catch (tagError: any) {
+            console.error('Error updating tags:', tagError);
+            // Return failure but indicate item details might have been updated
+            return fail(500, {
+                message: `Item updated, but failed to update tags: ${tagError.message}`,
+                values: { itemId, name, description, categoryId, expiration, tagsString, entityNameManual: entityNameManualInput },
+                isUpdate: true,
+                itemUpdatedButTagsFailed: true
+            });
+        }
+
+        // --- Success ---
+        return { 
+            status: 200, // OK
+            message: 'Item updated successfully.'
+        };
+    }
 }; 

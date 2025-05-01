@@ -2,40 +2,103 @@
 	import { enhance } from '$app/forms';
 	import { type SubmitFunction } from '@sveltejs/kit';
 
+	// Define Item type matching the server load more closely
+	type Item = {
+		id: string;
+		name: string;
+		description: string | null;
+		expiration: string;
+		created_at: string;
+		updated_at: string;
+		category: { id: string; name: string } | null;
+		tags: { id: string; name: string }[];
+		entity: { id: string; name: string } | null;
+		entity_name_manual: string | null;
+	};
+
 	let { data, form } = $props();
 	let { items, categories, entities } = $derived(data);
 
-	// State for the add item form
-	let showAddForm = $state(false);
+	// State for the form (add or edit)
+	let showForm = $state(false);
+	let editingItem: Item | null = $state(null);
 	let isSubmitting = $state(false);
+	let formRef: HTMLFormElement | null = $state(null);
 
-	// Reactive statement to clear form errors/values when the form is submitted successfully
+	// Compute form mode based on editingItem state
+	let isEditMode = $derived(!!editingItem);
+
+	// Function to open form for editing
+	function startEditing(item: Item) {
+		editingItem = item;
+		showForm = true;
+	}
+
+	// Function to close/cancel form
+	function cancelForm() {
+		showForm = false;
+		editingItem = null;
+	}
+
+	// Reactive statement to handle form state after submission
 	$effect(() => {
-		if ((form as any)?.message && !(form as any)?.values) {
-			// Potentially show a success toast/message here based on form.message
-			// if (form.message === 'Item added successfully') { ... }
-			// For now, just close the form on success or specific known non-error messages
-			if (!(form as any)?.itemAddedButTagsFailed) {
-				showAddForm = false;
+		// Success (Add or Update)
+		if ((form?.status === 201 || form?.status === 200) && !(form as any)?.values) {
+			cancelForm(); // Close form, clear editing state
+			formRef?.reset(); // Reset form fields
+			// Handle specific message for tag errors on update
+			if ((form as any)?.itemUpdatedButTagsFailed) {
+				// Maybe show a more specific success/warning toast
+				// alert('Item details updated, but there was an issue with tags.');
+			} else if (form?.message) {
+				// Show general success message: alert(form.message);
 			}
+		}
+		// Handle errors similarly to entities page (keeping form open)
+		else if (form?.status && form.status >= 400) {
+			// Keep form open, error message is displayed via {#if form?.message}
 		}
 	});
 
 	const handleSubmit: SubmitFunction = () => {
 		isSubmitting = true;
-		// Optionally return an ({ update }) function to control UI updates
 		return async ({ update }) => {
-			await update(); // Wait for SvelteKit to update form state and potentially page data
+			await update();
 			isSubmitting = false;
-			// Optionally reset form fields here IF the form didn't close automatically
-			// and IF there was no error (i.e., form?.values is null/undefined)
-			// if (!form?.values && showAddForm) { ... reset fields ... }
+			// Resetting/closing handled by $effect
 		};
 	};
 
 	// Helper function to get display name for entity
-	function getEntityDisplayName(item: typeof items[0]): string {
+	function getEntityDisplayName(item: Item): string {
 		return item.entity?.name ?? item.entity_name_manual ?? '-';
+	}
+
+	// Helper function to format tags for the input field
+	function formatTagsForInput(tags: { name: string }[]): string {
+		return tags.map(t => t.name).join(', ');
+	}
+
+	// Helper function to get the value for the entity input/datalist
+	function getEntityInputValue(item: Item | null): string {
+		if (!item) return '';
+		return item.entity?.name ?? item.entity_name_manual ?? '';
+	}
+
+	// Helper to format date for input type="date"
+	function formatDateForInput(dateString: string | null | undefined): string {
+		if (!dateString) return '';
+		try {
+			const date = new Date(dateString);
+			// Adjust for timezone offset to get YYYY-MM-DD in local time
+			const year = date.getFullYear();
+			const month = (date.getMonth() + 1).toString().padStart(2, '0');
+			const day = date.getDate().toString().padStart(2, '0');
+			return `${year}-${month}-${day}`;
+		} catch (e) {
+			console.error("Error formatting date:", e);
+			return ''; // Fallback
+		}
 	}
 </script>
 
@@ -47,26 +110,42 @@
 	<div class="flex justify-between items-center mb-6">
 		<h1 class="text-3xl font-bold">My Expiration Items</h1>
 		<button
-			onclick={() => (showAddForm = !showAddForm)}
+			onclick={() => {
+				editingItem = null; // Ensure add mode
+				showForm = !showForm;
+			}}
 			class="btn btn-primary"
-		>
-			{showAddForm ? 'Cancel' : '+ Add New Item'}
+			disabled={showForm && isEditMode}
+		> <!-- Disable add while editing-->
+			{showForm && !isEditMode ? 'Cancel' : '+ Add New Item'}
 		</button>
 	</div>
 
-	{#if showAddForm}
+	<!-- Add/Edit Item Form -->
+	{#if showForm}
 		<div class="card bg-base-200 shadow-xl mb-6">
 			<div class="card-body">
-				<h2 class="card-title mb-4">Add New Item</h2>
-				<form method="POST" action="?/addItem" use:enhance={handleSubmit}>
-					{#if form?.message}
+				<h2 class="card-title mb-4">{isEditMode ? 'Edit Item' : 'Add New Item'}</h2>
+				<form
+					method="POST"
+					action={isEditMode ? '?/updateItem' : '?/addItem'}
+					use:enhance={handleSubmit}
+					bind:this={formRef}
+				>
+					{#if form?.message && ( (form as any).values?.itemId === editingItem?.id || !(form as any).values?.isUpdate )}
 						<div
-							class={`alert ${ (form as any)?.values || (form as any)?.itemAddedButTagsFailed ? 'alert-error' : 'alert-success' } mb-4`}
+							class={`alert ${ (form?.status && form.status < 400) || (form as any)?.itemUpdatedButTagsFailed ? 'alert-success' : 'alert-error'} mb-4`}
 						>
 							<span>{form.message}</span>
 						</div>
 					{/if}
 
+					<!-- Hidden input for ID in edit mode -->
+					{#if isEditMode}
+						<input type="hidden" name="itemId" value={editingItem?.id} />
+					{/if}
+
+					<!-- Item Name -->
 					<div class="form-control mb-4">
 						<label for="name" class="label">
 							<span class="label-text">Item Name*</span>
@@ -77,10 +156,11 @@
 							type="text"
 							required
 							class="input input-bordered w-full"
-							value={(form as any)?.values?.name ?? ''}
+							value={isEditMode ? (form as any)?.values?.name ?? editingItem?.name ?? '' : (form as any)?.values?.name ?? ''}
 						/>
 					</div>
 
+					<!-- Description -->
 					<div class="form-control mb-4">
 						<label for="description" class="label">
 							<span class="label-text">Description</span>
@@ -89,10 +169,11 @@
 							id="description"
 							name="description"
 							class="textarea textarea-bordered w-full"
-							value={(form as any)?.values?.description ?? ''}
+							value={isEditMode ? (form as any)?.values?.description ?? editingItem?.description ?? '' : (form as any)?.values?.description ?? ''}
 						></textarea>
 					</div>
 
+					<!-- Category -->
 					<div class="form-control mb-4">
 						<label for="categoryId" class="label">
 							<span class="label-text">Category</span>
@@ -101,15 +182,16 @@
 							id="categoryId"
 							name="categoryId"
 							class="select select-bordered w-full"
-							value={(form as any)?.values?.categoryId ?? ''}
+							value={isEditMode ? (form as any)?.values?.categoryId ?? editingItem?.category?.id ?? '' : (form as any)?.values?.categoryId ?? ''}
 						>
-							<option value="" disabled selected={!(form as any)?.values?.categoryId}>Select a category</option>
+							<option value="" disabled selected={!(isEditMode ? (form as any)?.values?.categoryId ?? editingItem?.category?.id : (form as any)?.values?.categoryId)}>Select a category</option>
 							{#each categories as category}
 								<option value={category.id}>{category.name}</option>
 							{/each}
 						</select>
 					</div>
 
+					<!-- Entity Input with Datalist -->
 					<div class="form-control mb-4">
 						<label for="entityNameManual" class="label">
 							<span class="label-text">Provider / Entity</span>
@@ -121,7 +203,7 @@
 							class="input input-bordered w-full"
 							list="entities-list"
 							placeholder="Type or select an entity"
-							value={(form as any)?.values?.entityNameManual ?? ''}
+							value={isEditMode ? (form as any)?.values?.entityNameManual ?? getEntityInputValue(editingItem) : (form as any)?.values?.entityNameManual ?? ''}
 						/>
 						<datalist id="entities-list">
 							{#each entities as entity}
@@ -130,6 +212,7 @@
 						</datalist>
 					</div>
 
+					<!-- Tags -->
 					<div class="form-control mb-4">
 						<label for="tags" class="label">
 							<span class="label-text">Tags (comma-separated)</span>
@@ -139,10 +222,11 @@
 							name="tags"
 							type="text"
 							class="input input-bordered w-full"
-							value={(form as any)?.values?.tagsString ?? ''}
+							value={isEditMode ? (form as any)?.values?.tagsString ?? formatTagsForInput(editingItem?.tags ?? []) : (form as any)?.values?.tagsString ?? ''}
 						/>
 					</div>
 
+					<!-- Expiration Date -->
 					<div class="form-control mb-4">
 						<label for="expiration" class="label">
 							<span class="label-text">Expiration Date*</span>
@@ -153,15 +237,15 @@
 							type="date"
 							required
 							class="input input-bordered w-full"
-							value={(form as any)?.values?.expiration ?? ''}
+							value={isEditMode ? (form as any)?.values?.expiration ?? formatDateForInput(editingItem?.expiration) : (form as any)?.values?.expiration ?? ''}
 						/>
 					</div>
 
 					<div class="card-actions justify-end">
-						<button type="button" onclick={() => (showAddForm = false)} class="btn btn-ghost">Cancel</button>
+						<button type="button" onclick={cancelForm} class="btn btn-ghost">Cancel</button>
 						<button type="submit" class="btn btn-primary" disabled={isSubmitting}>
 							{#if isSubmitting} <span class="loading loading-spinner"></span> {/if}
-							{isSubmitting ? 'Adding...' : 'Add Item'}
+							{isSubmitting ? (isEditMode ? 'Updating...' : 'Adding...') : (isEditMode ? 'Update Item' : 'Add Item')}
 						</button>
 					</div>
 				</form>
@@ -180,7 +264,7 @@
 						<th>Category</th>
 						<th>Tags</th>
 						<th>Expires On</th>
-						<th>Actions</th> <!-- Placeholder for Edit/Delete -->
+						<th>Actions</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -201,9 +285,34 @@
 							</td>
 							<td>{new Date(item.expiration).toLocaleDateString()}</td>
 							<td>
-								<!-- Action buttons will go here -->
-								<button class="btn btn-xs btn-ghost">Edit</button>
-								<button class="btn btn-xs btn-ghost text-error">Delete</button>
+								<button
+									class="btn btn-xs btn-ghost"
+									onclick={() => startEditing(item)}
+									disabled={showForm}
+								> <!-- Disable while form is open -->
+									Edit
+								</button>
+								<!-- Delete Item Form -->
+								<form
+									method="POST"
+									action="?/deleteItem"
+									use:enhance
+									style="display: inline;"
+									onsubmit={() => {
+										if (!confirm('Are you sure you want to delete this item?')) {
+											return false; // Prevent submission
+										}
+									}}
+								>
+									<input type="hidden" name="itemId" value={item.id} />
+									<button
+										type="submit"
+										class="btn btn-xs btn-ghost text-error"
+										disabled={showForm}
+									> <!-- Disable while form is open-->
+										Delete
+									</button>
+								</form>
 							</td>
 						</tr>
 					{/each}
@@ -212,7 +321,7 @@
 		</div>
 	{:else}
 		<p class="text-center text-gray-500 mt-8">
-You haven't added any items yet.
+			You haven't added any items yet.
 		</p>
 	{/if}
 </div>
