@@ -3,7 +3,7 @@
 	import { type SubmitFunction } from '@sveltejs/kit';
 
 	let { data, form } = $props();
-	let { items, categories } = $derived(data);
+	let { items, categories, entities } = $derived(data);
 
 	// State for the add item form
 	let showAddForm = $state(false);
@@ -32,6 +32,11 @@
 			// if (!form?.values && showAddForm) { ... reset fields ... }
 		};
 	};
+
+	// Helper function to get display name for entity
+	function getEntityDisplayName(item: typeof items[0]): string {
+		return item.entity?.name ?? item.entity_name_manual ?? '-';
+	}
 </script>
 
 <svelte:head>
@@ -106,6 +111,26 @@
 					</div>
 
 					<div class="form-control mb-4">
+						<label for="entityNameManual" class="label">
+							<span class="label-text">Provider / Entity</span>
+						</label>
+						<input
+							id="entityNameManual"
+							name="entityNameManual"
+							type="text"
+							class="input input-bordered w-full"
+							list="entities-list"
+							placeholder="Type or select an entity"
+							value={(form as any)?.values?.entityNameManual ?? ''}
+						/>
+						<datalist id="entities-list">
+							{#each entities as entity}
+								<option value={entity.name}>{entity.description ? `${entity.name} (${entity.description})` : entity.name}</option>
+							{/each}
+						</datalist>
+					</div>
+
+					<div class="form-control mb-4">
 						<label for="tags" class="label">
 							<span class="label-text">Tags (comma-separated)</span>
 						</label>
@@ -151,6 +176,7 @@
 					<tr>
 						<th>Name</th>
 						<th>Description</th>
+						<th>Provider/Entity</th>
 						<th>Category</th>
 						<th>Tags</th>
 						<th>Expires On</th>
@@ -162,6 +188,7 @@
 						<tr>
 							<td>{item.name}</td>
 							<td>{item.description ?? '-'}</td>
+							<td>{getEntityDisplayName(item)}</td>
 							<td>{item.category?.name ?? '-'}</td>
 							<td>
 								{#if item.tags && item.tags.length > 0}
