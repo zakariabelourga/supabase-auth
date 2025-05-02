@@ -295,5 +295,81 @@ export const actions: Actions = {
             status: 200, // OK
             message: 'Item updated successfully.'
         };
+    },
+
+    // --- deleteNote Action ---
+    deleteNote: async ({ request, params, locals }) => {
+        const { supabase, session } = locals;
+        if (!session) {
+            return fail(401, { noteDeleteError: 'Unauthorized' });
+        }
+
+        const formData = await request.formData();
+        const noteId = formData.get('noteId') as string | null;
+        const itemId = params.itemId; // For context if needed, but RLS checks user_id on note
+
+        if (!noteId) {
+            return fail(400, { noteDeleteError: 'Missing note ID.' });
+        }
+
+        // Delete the note, ensuring it belongs to the current user via RLS
+        // RLS Policy: DELETE ON item_notes FOR DELETE USING (auth.uid() = user_id)
+        const { error } = await supabase
+            .from('item_notes')
+            .delete()
+            .match({ id: noteId, user_id: session.user.id }); // Match user_id for defense-in-depth
+
+        if (error) {
+            console.error('Error deleting note:', error);
+            return fail(500, {
+                noteDeleteError: `Database error deleting note: ${error.message}`,
+                errorNoteId: noteId // Pass back ID for potential UI feedback
+            });
+        }
+
+        return { noteDeleteSuccess: 'Note deleted successfully.' };
+    },
+
+    // --- updateNote Action ---
+    updateNote: async ({ request, params, locals }) => {
+        const { supabase, session } = locals;
+        if (!session) {
+            return fail(401, { noteUpdateError: 'Unauthorized' });
+        }
+
+        const formData = await request.formData();
+        const noteId = formData.get('noteId') as string | null;
+        const noteText = formData.get('noteText') as string | null;
+        const itemId = params.itemId; // Context
+
+        // Validation
+        if (!noteId) {
+            return fail(400, { noteUpdateError: 'Missing note ID.', noteId, noteText });
+        }
+        if (!noteText || noteText.trim().length === 0) {
+            return fail(400, { noteUpdateError: 'Note text cannot be empty.', noteId, noteText });
+        }
+
+        // Update the note, ensuring it belongs to the user via RLS + match
+        // RLS Policy: UPDATE ON item_notes FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id)
+        const { error } = await supabase
+            .from('item_notes')
+            .update({
+                note_text: noteText.trim(),
+                // updated_at is handled by the database trigger (if created)
+                // If no trigger: updated_at: new Date()
+            })
+            .match({ id: noteId, user_id: session.user.id });
+
+        if (error) {
+            console.error('Error updating note:', error);
+            return fail(500, {
+                noteUpdateError: `Database error updating note: ${error.message}`,
+                errorNoteId: noteId,
+                noteText // Return submitted text for repopulation
+            });
+        }
+
+        return { noteUpdateSuccess: 'Note updated successfully.' };
     }
 }; 

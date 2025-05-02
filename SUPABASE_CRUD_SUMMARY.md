@@ -39,11 +39,7 @@ This section details the schema and RLS policies for the relevant tables as prov
     *   `description` (text, nullable)
     *   `created_at` (timestamp with time zone, default: now())
     *   Constraint: `entities_user_id_name_key` UNIQUE (`user_id`, `name`)
-*   **RLS Policies:** *(Initially none defined, but recommended policies were added via SQL)*
-    *   SELECT: Allow `auth.uid() = user_id`
-    *   INSERT: Allow `auth.uid() = user_id`
-    *   UPDATE: Allow `auth.uid() = user_id`
-    *   DELETE: Allow `auth.uid() = user_id`
+*   **RLS Policies:** SELECT, INSERT, UPDATE, DELETE based on `auth.uid() = user_id`.
 *   **Notes:** Users manage their own entities. RLS ensures users only interact with their own data.
 
 ### `tags`
@@ -80,6 +76,22 @@ This section details the schema and RLS policies for the relevant tables as prov
 *   **RLS Policies:** None defined (Access controlled via actions modifying linked items/tags).
 *   **Notes:** Enables the many-to-many relationship.
 
+### `item_notes`
+*   **Description:** Stores notes associated with specific items.
+*   **Columns:**
+    *   `id` (uuid, primary key, default: gen_random_uuid())
+    *   `item_id` (uuid, not null, foreign key references items(id) ON DELETE CASCADE)
+    *   `user_id` (uuid, not null, foreign key references auth.users(id) ON DELETE CASCADE)
+    *   `note_text` (text, not null, CHECK constraint prevents empty)
+    *   `created_at` (timestamp with time zone, default: now())
+    *   `updated_at` (timestamp with time zone, default: now(), trigger recommended)
+*   **RLS Policies:**
+    *   SELECT: Allow `auth.uid() = user_id`
+    *   INSERT: Allow `auth.uid() = user_id`
+    *   UPDATE: Allow `auth.uid() = user_id`
+    *   DELETE: Allow `auth.uid() = user_id`
+*   **Notes:** `item_id` cascade ensures notes are deleted if the parent item is deleted. RLS ensures users manage only their own notes.
+
 ## Core Concepts & Setup (Revised)
 
 1.  **Supabase Client Access:**
@@ -93,6 +105,7 @@ This section details the schema and RLS policies for the relevant tables as prov
     *   **Joins:** Supabase's join syntax (`related_table ( columns ), other_related_table ( columns )`) is used within `.select()` to efficiently fetch related data (e.g., category names, tags, linked entity names for items).
     *   **Type Safety:** TypeScript interfaces (e.g., `ItemWithRelations`, `Entity`) are defined to represent the expected shape of data returned from Supabase, including joined relations. Type casting (`data as unknown as Interface[]`) is used to align the fetched data with these interfaces, improving intellisense and catching potential errors.
     *   **Data Passing:** The fetched data (e.g., `items`, `categories`, `entities`) is returned from the `load` function, making it available in the corresponding `+page.svelte` component via the `data` prop (`let { data } = $props();`).
+    *   **Type Safety Note:** Due to limitations in the Supabase client's generic typing, especially with joins returning single related objects, we sometimes need to cast the fetched `data as unknown as ExpectedType[]` to align it with our more specific TypeScript interfaces. Always define clear interfaces for your expected data shapes.
 
 3.  **Server-Side Mutations (`actions`):**
     *   **Primary Method:** All Create, Update, and Delete operations are handled via named SvelteKit `actions` defined within the `actions` object in `+page.server.ts` files.
@@ -106,13 +119,14 @@ This section details the schema and RLS policies for the relevant tables as prov
     *   **Return Values:**
         *   On validation errors or database errors, actions return `fail(statusCode, { message: ..., values: { ... } })`. Including `values` allows the form on the client to be repopulated.
         *   On success, actions typically return a success object (e.g., `{ status: 200, message: 'Success!' }`) or use `redirect()`. Redirects are less necessary when using progressive enhancement effectively.
+    *   **Standard Error Handling:** Standard error handling uses `fail(statusCode, { message: ..., values: {...} })`. The `message` is displayed to the user via the `$form` prop. Including `values` allows repopulating the form on validation errors. Check `error.code` for specific database errors (like unique constraint '23505') to provide more specific feedback.
 
 4.  **Frontend Integration (`.svelte` Components):**
     *   **Data Access:** Components receive loaded data via `let { data } = $props();` and reactive form action results via `let { form } = $props();`. `$derived` is used for reactive access: `let { items, categories, entities } = $derived(data);`.
     *   **Displaying Data:** Fetched data (e.g., `items`, `entities`) is displayed using `#each` blocks, typically within HTML tables. Helper functions are sometimes used for formatting (e.g., dates, entity display names).
     *   **Forms & Progressive Enhancement:**
         *   HTML `<form>` tags are used with `method="POST"` and the `action` attribute pointing to the specific server action (e.g., `action="?/addItem"`, `action="?/updateEntity"`).
-        *   `use:enhance={handleSubmit}` (from `$app/forms`) is applied to forms for progressive enhancement. This prevents full-page reloads on submission, updates the `form` prop reactively, and allows for managing loading states (`isSubmitting`).
+        *   `use:enhance` Pattern:** The `use:enhance` directive enables progressive enhancement. The typical flow is: Form submits -> Server action runs -> Action returns JSON result (success or `fail`) -> SvelteKit updates the page's `$form` prop -> `$effect` blocks in the component react to `$form` changes to update UI (e.g., close form, show messages), and SvelteKit automatically re-runs relevant `load` functions to refresh data.
         *   The optional `handleSubmit` function passed to `enhance` allows controlling UI state during submission (like setting `isSubmitting`) and awaiting the update.
     *   **Add/Edit Form Logic:**
         *   State variables (`showForm`, `editingItem`/`editingEntity`, `isEditMode`) manage whether the form is displayed and if it's in "add" or "edit" mode.
@@ -121,6 +135,7 @@ This section details the schema and RLS policies for the relevant tables as prov
         *   If an action fails validation and returns `fail` with `values`, the form inputs are repopulated using `(form as any)?.values?.fieldName ?? defaultEditValue ?? ''`. The `as any` assertion is used because SvelteKit's default `form` type doesn't know about our custom `values` structure.
     *   **Displaying Action Feedback:** Action results are displayed using the reactive `form` prop: `{#if form?.message} ... {/if}`. Alert styles can be conditionally applied based on `form.status` or other flags returned by the action.
     *   **Client-Side Confirmation:** For destructive actions (Delete), an `onsubmit` handler using an arrow function (`onsubmit={() => { if (!confirm(...)) return false; }}`) provides client-side confirmation before the form is submitted.
+    *   **Component Refactoring:** Reusable form components (e.g., `src/lib/components/ItemForm.svelte`) are created to handle common UI logic for adding/editing, receiving necessary data (like the item being edited, related data like categories/entities) and action results (`$form`) as props.
 
 5.  **Row Level Security (RLS) & Action-Level Checks:**
     *   **RLS Importance:** RLS is a powerful security feature available in Supabase/PostgreSQL.
@@ -130,17 +145,27 @@ This section details the schema and RLS policies for the relevant tables as prov
         *   The `items`, `tags`, `item_tags`, and `categories` tables currently **do not** have specific RLS policies defined.
     *   **Security Reliance:** For tables without explicit RLS (`items`, `tags`, `entities` before manual addition), security relies heavily on **server-side action logic**. Actions consistently use `.match({ ..., user_id: session.user.id })` or `.eq('user_id', session.user.id)` within Supabase queries (inserts, updates, deletes, selects) to ensure users only interact with their own data.
     *   **Recommendation:** While action-level checks provide security, **enabling RLS on all tables containing user-specific data (`items`, `tags`, `entities`) is strongly recommended** as a best practice and defense-in-depth measure. RLS enforces security at the database level, regardless of application code errors.
+    *   The `item_notes` table has RLS policies ensuring users only interact with their own notes.
 
 ## Specific Implementations (Revised)
 
-### Items (`/app/items`)
+### Items
 
-*   **Schema:** See Database Tables Overview section.
-*   **Load:** Fetches user's items with joins to `categories`, `tags`, and `entities`. Also fetches all `categories` and user's `entities` for form population. Uses `.eq('user_id', ...)` for data fetching.
-*   **`addItem` Action:** Inserts item, ensuring `user_id` is set. Handles `categoryId`, `entityNameManual`/`entity_id` linking, and tag creation/linking (associating tags with the correct `user_id`).
-*   **`updateItem` Action:** Updates item, ensuring match on `id` and `user_id`. Handles updates to core fields, `categoryId`, `entityNameManual`/`entity_id`, and complex tag diffing/updating (finding/creating/linking/unlinking tags associated with the correct `user_id`).
-*   **`deleteItem` Action:** Deletes the item matching `itemId` and `user_id`.
-*   **Frontend:** Displays items. Uses a single form for Add/Edit.
+*   **Routes:**
+    *   `/app/items`: List page.
+    *   `/app/items/[itemId]`: Detail/Edit page.
+*   **Schema:** See `items`, `item_tags`, `item_notes` in Database Tables Overview section.
+*   **Component:** `src/lib/components/ItemForm.svelte` handles the form UI for add/edit.
+*   **List Page (`/app/items/+page.server.ts`, `+page.svelte`):**
+    *   **Load:** Fetches user's items (no notes needed for list view).
+    *   **Actions:** `addItem`, `deleteItem`.
+    *   **Frontend:** Displays item list table. Uses `ItemForm` component for adding new items (`item={null}`). Links Edit button to the detail page. Includes delete form.
+*   **Detail Page (`/app/items/[itemId]/+page.server.ts`, `+page.svelte`):**
+    *   **Load:** Fetches the specific item (matching `itemId` and `user_id`) including related `categories`, `tags`, `entities`, and `item_notes`. Also fetches `categories` and `entities` for the form.
+    *   **Actions:** `updateItem`, `addNote`, `updateNote`, `deleteNote`.
+    *   **Frontend:** Uses `ItemForm` component for editing the loaded item. Displays the list of notes. Includes forms for adding, editing (inline), and deleting notes.
+*   **`updateItem` Action:** Now located in `[itemId]/+page.server.ts`, uses `params.itemId`.
+*   **Notes Actions (`addNote`, `updateNote`, `deleteNote`):** Located in `[itemId]/+page.server.ts`, operate on `item_notes` table, matching on `noteId` and `user_id` for security.
 
 ### Entities (`/app/entities`)
 
@@ -150,5 +175,10 @@ This section details the schema and RLS policies for the relevant tables as prov
 *   **`updateEntity` Action:** Updates entity, matching on `id` and `user_id`.
 *   **`deleteEntity` Action:** Deletes entity, matching on `id` and `user_id`.
 *   **Frontend:** Displays entities. Uses a single form for Add/Edit.
+
+## Code Structure Conventions
+*   Server-side logic (`load` functions, `actions`) for a specific route (e.g., `/app/feature`) resides in `src/routes/app/feature/+page.server.ts`.
+*   Detail pages typically use dynamic routes (e.g., `/app/feature/[id]`).
+*   Reusable UI components, like forms, are placed in `src/lib/components/` (e.g., `ItemForm.svelte`).
 
 This summary provides a high-level overview of the established patterns for interacting with Supabase in this project. Refer to the specific `+page.server.ts` and `+page.svelte` files for detailed implementation logic. 
