@@ -2,6 +2,8 @@
 	import { enhance } from '$app/forms';
 	import { type SubmitFunction } from '@sveltejs/kit';
 	import ItemForm from '$lib/components/ItemForm.svelte';
+	import PlusCircle from '@lucide/svelte/icons/plus-circle';
+	import { Button } from '$lib/components/ui/button/index.js';
 
 	// Define Item type matching the server load more closely
 	type Item = {
@@ -20,13 +22,17 @@
 	let { data, form } = $props();
 	let { items, categories, entities } = $derived(data);
 
-	// State for the add item form visibility
-	let showAddForm = $state(false);
+	// State for the add item dialog
+	let showAddDialog = $state(false);
+	
+	function handleAddDialogOpenChange(open: boolean) {
+		showAddDialog = open;
+	}
 
 	// Reactive statement to close form on successful ADDITION
 	$effect(() => {
 		if (form?.status === 201 && !(form as any)?.values) { // 201 Created
-			showAddForm = false;
+			showAddDialog = false;
 		}
 	});
 
@@ -67,25 +73,32 @@
 	<title>My Items</title>
 </svelte:head>
 
+<!-- Item Form Dialog -->
+<ItemForm 
+	item={null} 
+	{categories} 
+	{entities} 
+	formResult={form as any}
+	bind:open={showAddDialog}
+	onOpenChange={handleAddDialogOpenChange}
+/>
+
 <div class="container mx-auto p-4 md:p-8">
 	<div class="flex justify-between items-center mb-6">
 		<h1 class="text-3xl font-bold">My Expiration Items</h1>
-		<button
-			onclick={() => (showAddForm = !showAddForm)}
-			class="btn btn-primary"
+		<Button 
+			variant="default" 
+			onclick={() => showAddDialog = true}
+			class="flex items-center gap-2"
 		>
-			{showAddForm ? 'Cancel' : '+ Add New Item'}
-		</button>
+			<PlusCircle class="size-4" /> Add New Item
+		</Button>
 	</div>
 
-	<!-- Add Item Form (using component) -->
-	{#if showAddForm}
-		<ItemForm 
-			item={null} 
-			categories={categories} 
-			entities={entities} 
-			bind:formResult={form as any}
-		/>
+	{#if form?.message && form?.status !== 201}
+		<div class="alert {form.status && form.status < 400 ? 'alert-success' : 'alert-error'} mb-4">
+			<span>{form.message}</span>
+		</div>
 	{/if}
 
 	{#if items.length > 0}
@@ -120,7 +133,7 @@
 							</td>
 							<td>{new Date(item.expiration).toLocaleDateString()}</td>
 							<td>
-								<a href={`/app/items/${item.id}`} class="btn btn-xs btn-ghost">Edit</a>
+								<a href={`/app/items/${item.id}`} class="btn btn-xs btn-ghost">View</a>
 								<form 
 									method="POST" 
 									action="?/deleteItem" 
@@ -136,7 +149,6 @@
 									<button 
 										type="submit" 
 										class="btn btn-xs btn-ghost text-error"
-										disabled={showAddForm}
 									>
 										Delete
 									</button>
@@ -148,9 +160,12 @@
 			</table>
 		</div>
 	{:else}
-		<p class="text-center text-gray-500 mt-8">
-			You haven't added any items yet.
-		</p>
+		<div class="text-center p-10 border rounded-lg bg-muted/30">
+			<p class="text-muted-foreground mb-4">
+				You haven't added any items yet.
+			</p>
+			<Button variant="outline" onclick={() => showAddDialog = true}>Add Your First Item</Button>
+		</div>
 	{/if}
 </div>
 

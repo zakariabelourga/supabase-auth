@@ -85,11 +85,11 @@
 		};
 	};
 
-	// Handle item form state
-	let showItemForm = $state(false); // Hide item form by default
-
-	function toggleItemForm() {
-		showItemForm = !showItemForm;
+	// Dialog state for item form
+	let showItemDialog = $state(false);
+	
+	function handleItemFormOpenChange(open: boolean) {
+		showItemDialog = open;
 	}
 
 	$effect(() => {
@@ -104,7 +104,7 @@
 			!(form as any)?.noteDeleteSuccess &&
 			!(form as any)?.noteDeleteError
 		) {
-			showItemForm = false; // Hide form after successful update
+			showItemDialog = false; // Hide form after successful update
 		}
 	});
 
@@ -141,6 +141,16 @@
 	<title>Item: {item.name}</title>
 </svelte:head>
 
+<!-- Item Form Dialog -->
+<ItemForm 
+	{item} 
+	{categories} 
+	{entities} 
+	formResult={form as any} 
+	bind:open={showItemDialog}
+	onOpenChange={handleItemFormOpenChange}
+/>
+
 <div class="container mx-auto p-4 md:p-8">
 	<a href="/app/items" class="btn btn-ghost mb-6">&larr; Back to Items</a>
 
@@ -153,101 +163,86 @@
 	{/if}
 
 	<!-- Item Details Card -->
-	{#if !showItemForm}
-		<Card.Root class="mb-6">
-			<Card.Header>
-				<div class="flex flex-row items-center justify-between space-y-0 pb-2">
-					<div>
-						<Card.Title class="text-2xl font-bold mb-1">{item.name}</Card.Title>
-						<Card.CardDescription>{item.description || 'No description provided'}</Card.CardDescription>
-					</div>
-					<Button variant="outline" onclick={toggleItemForm} class="flex items-center gap-2">
-						<PencilLine class="size-4" /> Edit Item
-					</Button>
+	<Card.Root class="mb-6">
+		<Card.Header>
+			<div class="flex flex-row items-center justify-between space-y-0 pb-2">
+				<div>
+					<Card.Title class="text-2xl font-bold mb-1">{item.name}</Card.Title>
+					<Card.Description>{item.description || 'No description provided'}</Card.Description>
 				</div>
-			</Card.Header>
-			<Card.Content>
-				<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-					<!-- Left column -->
-					<div class="space-y-4">
-						<!-- Expiration Date -->
-						<div class="flex items-start gap-4">
-							<Calendar class="mt-1 size-5 text-muted-foreground" />
-							<div>
-								<h3 class="font-semibold">Expiration Date</h3>
-								<p>{formatDate(item.expiration)}</p>
-							</div>
-						</div>
-
-						<!-- Category -->
-						<div class="flex items-start gap-4">
-							<Tag class="mt-1 size-5 text-muted-foreground" />
-							<div>
-								<h3 class="font-semibold">Category</h3>
-								<p>{item.category?.name ?? 'Uncategorized'}</p>
-							</div>
-						</div>
-
-						<!-- Provider/Entity -->
-						<div class="flex items-start gap-4">
-							<Store class="mt-1 size-5 text-muted-foreground" />
-							<div>
-								<h3 class="font-semibold">Provider/Entity</h3>
-								<p>{getEntityDisplayName()}</p>
-							</div>
+				<Button variant="outline" onclick={() => showItemDialog = true} class="flex items-center gap-2">
+					<PencilLine class="size-4" /> Edit Item
+				</Button>
+			</div>
+		</Card.Header>
+		<Card.Content>
+			<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+				<!-- Left column -->
+				<div class="space-y-4">
+					<!-- Expiration Date -->
+					<div class="flex items-start gap-4">
+						<Calendar class="mt-1 size-5 text-muted-foreground" />
+						<div>
+							<h3 class="font-semibold">Expiration Date</h3>
+							<p>{formatDate(item.expiration)}</p>
 						</div>
 					</div>
 
-					<!-- Right column -->
-					<div class="space-y-4">
-						<!-- Tags -->
-						<div class="flex items-start gap-4">
-							<Tag class="mt-1 size-5 text-muted-foreground" />
-							<div>
-								<h3 class="font-semibold">Tags</h3>
-								<div class="mt-1 flex flex-wrap gap-2">
-									{#if item.tags && item.tags.length > 0}
-										{#each item.tags as tag}
-											<Badge variant="default">{tag.name}</Badge>
-										{/each}
-									{:else}
-										<p>No tags</p>
-									{/if}
-								</div>
-							</div>
+					<!-- Category -->
+					<div class="flex items-start gap-4">
+						<Tag class="mt-1 size-5 text-muted-foreground" />
+						<div>
+							<h3 class="font-semibold">Category</h3>
+							<p>{item.category?.name ?? 'Uncategorized'}</p>
 						</div>
+					</div>
 
-						<!-- Created/Updated dates -->
-						<div class="flex items-start gap-4">
-							<Calendar class="mt-1 size-5 text-muted-foreground" />
-							<div>
-								<h3 class="font-semibold">Created</h3>
-								<p>{formatDate(item.created_at)}</p>
-								{#if item.created_at !== item.updated_at}
-									<p class="text-sm text-muted-foreground">
-										Last updated: {formatDate(item.updated_at)}
-									</p>
+					<!-- Provider/Entity -->
+					<div class="flex items-start gap-4">
+						<Store class="mt-1 size-5 text-muted-foreground" />
+						<div>
+							<h3 class="font-semibold">Provider/Entity</h3>
+							<p>{getEntityDisplayName()}</p>
+						</div>
+					</div>
+				</div>
+
+				<!-- Right column -->
+				<div class="space-y-4">
+					<!-- Tags -->
+					<div class="flex items-start gap-4">
+						<Tag class="mt-1 size-5 text-muted-foreground" />
+						<div>
+							<h3 class="font-semibold">Tags</h3>
+							<div class="mt-1 flex flex-wrap gap-2">
+								{#if item.tags && item.tags.length > 0}
+									{#each item.tags as tag}
+										<Badge variant="default">{tag.name}</Badge>
+									{/each}
+								{:else}
+									<p>No tags</p>
 								{/if}
 							</div>
 						</div>
 					</div>
+
+					<!-- Created/Updated dates -->
+					<div class="flex items-start gap-4">
+						<Calendar class="mt-1 size-5 text-muted-foreground" />
+						<div>
+							<h3 class="font-semibold">Created</h3>
+							<p>{formatDate(item.created_at)}</p>
+							{#if item.created_at !== item.updated_at}
+								<p class="text-sm text-muted-foreground">
+									Last updated: {formatDate(item.updated_at)}
+								</p>
+							{/if}
+						</div>
+					</div>
 				</div>
-			</Card.Content>
-		</Card.Root>
-	{:else}
-		<!-- Item Edit Form -->
-		<Card.Root class="mb-6">
-			<Card.Header class="flex flex-row items-center justify-between space-y-0 pb-2">
-				<Card.Title>Edit Item</Card.Title>
-				<Button variant="outline" onclick={toggleItemForm} class="flex items-center gap-2">
-					<X class="size-4" /> Cancel
-				</Button>
-			</Card.Header>
-			<Card.Content>
-				<ItemForm {item} {categories} {entities} formResult={form as any} />
-			</Card.Content>
-		</Card.Root>
-	{/if}
+			</div>
+		</Card.Content>
+	</Card.Root>
 
 	<!-- Item Notes Section -->
 	<Card.Root class="border-none shadow-none">

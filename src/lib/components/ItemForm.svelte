@@ -6,7 +6,7 @@
 	import { Label } from '$lib/components/ui/label/index.js';
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
-	import * as Card from '$lib/components/ui/card/index.js';
+	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import * as Popover from '$lib/components/ui/popover/index.js';
 	import * as Command from '$lib/components/ui/command/index.js';
 	import Check from '@lucide/svelte/icons/check';
@@ -43,12 +43,16 @@
 		item = $bindable(null),
 		categories = [] as Category[], // Use plain default array
 		entities = [] as Entity[], // Use plain default array
-		formResult = $bindable(null as ItemFormResult | null | undefined) // Bindable prop for parent's $form
+		formResult = $bindable(null as ItemFormResult | null | undefined), // Bindable prop for parent's $form
+		open = $bindable(false), // Dialog open state
+		onOpenChange = $bindable((value: boolean) => {}) // Callback for dialog open state changes
 	}: {
 		item?: Item | null;
 		categories?: Category[];
 		entities?: Entity[];
 		formResult?: ItemFormResult | null | undefined;
+		open?: boolean;
+		onOpenChange?: (value: boolean) => void;
 	} = $props();
 
 	// --- Internal Component State ---
@@ -110,7 +114,11 @@
 			await update();
 			// Now that the update is done, explicitly reset the submitting state
 			isSubmitting = false;
-			// Parent page handles closing the form via its $effect
+			
+			// If the form was successful, close the dialog
+			if (result.type === 'success' && !result.data?.values) {
+				onOpenChange(false);
+			}
 		};
 	};
 
@@ -151,18 +159,24 @@
 	});
 </script>
 
-<!-- Add/Edit Item Form Component -->
-<Card.Root>
-	<Card.Header>
-		<Card.Title>{isEditMode ? 'Edit Item' : 'Add New Item'}</Card.Title>
-		<Card.Description>Card Description</Card.Description>
-	</Card.Header>
-	<Card.Content>
+<!-- Item form in dialog -->
+<Dialog.Root bind:open={open} onOpenChange={onOpenChange}>
+	<Dialog.Content class="sm:max-w-[600px]">
+		<Dialog.Header>
+			<Dialog.Title>{isEditMode ? 'Edit Item' : 'Add New Item'}</Dialog.Title>
+			<Dialog.Description>
+				{isEditMode 
+					? 'Update the details of your item below.' 
+					: 'Fill in the details to add a new item.'}
+			</Dialog.Description>
+		</Dialog.Header>
+		
 		<form
 			method="POST"
 			action={isEditMode ? '?/updateItem' : '?/addItem'}
 			use:enhance={handleSubmit}
 			bind:this={formRef}
+			class="py-4"
 		>
 			<!-- Action determined by parent page context -->
 			<!-- Display Message from Parent ($form / formResult prop) -->
@@ -182,9 +196,9 @@
 			<!-- Hidden input for Category ID -->
 			<input type="hidden" name="categoryId" bind:value={selectedCategoryId} />
 
-			<div class="flex justify-between">
+			<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 				<!-- Item Name -->
-				<div class="form-control mb-4 w-[200px]">
+				<div class="form-control mb-4">
 					<Label for="name">Item Name*</Label>
 					<Input
 						id="name"
@@ -210,7 +224,7 @@
 				</div>
 
 				<!-- Entity Input with Datalist -->
-				<div class="form-control mb-4 w-[200px]">
+				<div class="form-control mb-4">
 					<Label for="entityNameManual">Provider / Entity</Label>
 					<Input
 						id="entityNameManual"
@@ -233,7 +247,7 @@
 				</div>
 
 				<!-- Category Combobox -->
-				<div class="form-control mb-4 w-[200px]">
+				<div class="form-control mb-4">
 					<Label>Category</Label>
 					<Popover.Root bind:open={categoryComboboxOpen}>
 						<Popover.Trigger class="w-full" bind:ref={categoryTriggerRef}>
@@ -292,7 +306,7 @@
 				</div>
 
 				<!-- Tags -->
-				<div class="form-control mb-4 w-[200px]">
+				<div class="form-control mb-4 sm:col-span-2">
 					<Label for="tags">Tags (comma-separated)</Label>
 					<Input
 						id="tags"
@@ -315,11 +329,13 @@
 				></Textarea>
 			</div>
 
-			<div class="mt-8 flex justify-between">
-				<!-- Cancel button is handled by the parent page -->
-				<Button type="submit" class="btn btn-primary" disabled={isSubmitting}>
+			<Dialog.Footer>
+				<Button
+					type="submit"
+					class="btn btn-primary"
+					disabled={isSubmitting}>
 					{#if isSubmitting}
-						<Loader class="animate-spin" />
+						<Loader class="animate-spin mr-2" />
 					{/if}
 					{isSubmitting
 						? isEditMode
@@ -329,7 +345,7 @@
 							? 'Update Item'
 							: 'Add Item'}
 				</Button>
-			</div>
+			</Dialog.Footer>
 		</form>
-	</Card.Content>
-</Card.Root>
+	</Dialog.Content>
+</Dialog.Root>
