@@ -66,11 +66,19 @@
 	let categoryComboboxOpen = $state(false);
 	let selectedCategoryId = $state('');
 	let categoryTriggerRef = $state<HTMLButtonElement | null>(null);
+	let categorySearchValue = $state(''); // State for category search input
 
 	const selectedCategoryName = $derived(categories.find((c) => c.id === selectedCategoryId)?.name);
 
+	const filteredCategories = $derived(
+		categories.filter((category) =>
+			category.name.toLowerCase().includes(categorySearchValue.toLowerCase())
+		)
+	);
+
 	function closeCategoryComboboxAndFocusTrigger() {
 		categoryComboboxOpen = false;
+		categorySearchValue = ''; // Clear search on close
 		tick().then(() => {
 			categoryTriggerRef?.focus();
 		});
@@ -256,8 +264,8 @@
 							</Button>
 						</Popover.Trigger>
 						<Popover.Content class="w-[--radix-popover-trigger-width] p-0">
-							<Command.Root>
-								<Command.Input placeholder="Search category..." />
+							<Command.Root shouldFilter={false}>
+								<Command.Input placeholder="Search category..." bind:value={categorySearchValue} />
 								<Command.List>
 									<Command.Empty>No category found.</Command.Empty>
 									<Command.Group>
@@ -274,8 +282,8 @@
 											/>
 											(No Category)
 										</Command.Item>
-										<!-- Loop through categories -->
-										{#each categories as category (category.id)}
+										<!-- Loop through filtered categories -->
+										{#each filteredCategories as category (category.id)}
 											<Command.Item
 												value={category.id}
 												onSelect={() => {

@@ -84,7 +84,7 @@
 				<Building2 class="size-4 opacity-50" />
 			</Popover.Trigger>
 			<Popover.Content class="p-0 w-[--radix-popover-trigger-width]" sideOffset={5}>
-				<Command.Root>
+				<Command.Root shouldFilter={false}>
 					<Command.Input
 						placeholder="Search entity..."
 						bind:value={searchValue}
