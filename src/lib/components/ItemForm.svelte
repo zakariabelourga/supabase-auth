@@ -7,15 +7,9 @@
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
-	import * as Popover from '$lib/components/ui/popover/index.js';
-	import * as Command from '$lib/components/ui/command/index.js';
-	import Check from '@lucide/svelte/icons/check';
-	import ChevronsUpDown from '@lucide/svelte/icons/chevrons-up-down';
-	import Building2 from '@lucide/svelte/icons/building-2';
-	import { tick } from 'svelte';
-	import { cn } from '$lib/utils.js';
 	import Loader from '@lucide/svelte/icons/loader';
 	import EntityCombobox from '$lib/components/EntityCombobox.svelte';
+	import CategoryCombobox from '$lib/components/CategoryCombobox.svelte';
 
 	// --- Component Props ---
 	type Category = { id: string; name: string };
@@ -62,28 +56,7 @@
 	let formRef: HTMLFormElement | null = $state(null);
 	let isEditMode = $derived(!!item); // Derived state internal to component
 
-	// --- Category Combobox State ---
-	let categoryComboboxOpen = $state(false);
-	let selectedCategoryId = $state('');
-	let categoryTriggerRef = $state<HTMLButtonElement | null>(null);
-	let categorySearchValue = $state(''); // State for category search input
-
-	const selectedCategoryName = $derived(categories.find((c) => c.id === selectedCategoryId)?.name);
-
-	const filteredCategories = $derived(
-		categories.filter((category) =>
-			category.name.toLowerCase().includes(categorySearchValue.toLowerCase())
-		)
-	);
-
-	function closeCategoryComboboxAndFocusTrigger() {
-		categoryComboboxOpen = false;
-		categorySearchValue = ''; // Clear search on close
-		tick().then(() => {
-			categoryTriggerRef?.focus();
-		});
-	}
-	// --- End Category Combobox State ---
+	let selectedCategoryId = $state(''); // This will be bound to CategoryCombobox
 
 	// --- Input State ---
 	let nameInputValue = $state('');
@@ -91,10 +64,6 @@
 	let entityInputValue = $state('');
 	let tagsInputValue = $state('');
 	let descriptionInputValue = $state('');
-	// --- End Input State ---
-
-	// --- Entity Combobox State ---
-	// Removed entity combobox states: entityComboboxOpen, entitySearchValue, entityTriggerRef
 
 	// --- Helper Functions ---
 	function formatTagsForInput(tags: ItemTag[] | undefined | null): string {
@@ -209,6 +178,7 @@
 			<!-- Hidden input for Category ID -->
 			<input type="hidden" name="categoryId" bind:value={selectedCategoryId} />
 
+			<!-- Input Fields -->
 			<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 				<!-- Item Name -->
 				<div class="form-control mb-4">
@@ -250,61 +220,13 @@
 
 				<!-- Category Combobox -->
 				<div class="form-control mb-4">
-					<Label>Category</Label>
-					<Popover.Root bind:open={categoryComboboxOpen}>
-						<Popover.Trigger class="w-full" bind:ref={categoryTriggerRef}>
-							<Button
-								variant="outline"
-								role="combobox"
-								aria-expanded={categoryComboboxOpen}
-								class="w-full justify-between"
-							>
-								{selectedCategoryName || 'Select a category...'}
-								<ChevronsUpDown class="ml-2 size-4 shrink-0 opacity-50" />
-							</Button>
-						</Popover.Trigger>
-						<Popover.Content class="w-[--radix-popover-trigger-width] p-0">
-							<Command.Root shouldFilter={false}>
-								<Command.Input placeholder="Search category..." bind:value={categorySearchValue} />
-								<Command.List>
-									<Command.Empty>No category found.</Command.Empty>
-									<Command.Group>
-										<!-- Option for no category -->
-										<Command.Item
-											value=""
-											onSelect={() => {
-												selectedCategoryId = '';
-												closeCategoryComboboxAndFocusTrigger();
-											}}
-										>
-											<Check
-												class={cn('mr-2 size-4', selectedCategoryId !== '' && 'text-transparent')}
-											/>
-											(No Category)
-										</Command.Item>
-										<!-- Loop through filtered categories -->
-										{#each filteredCategories as category (category.id)}
-											<Command.Item
-												value={category.id}
-												onSelect={() => {
-													selectedCategoryId = category.id;
-													closeCategoryComboboxAndFocusTrigger();
-												}}
-											>
-												<Check
-													class={cn(
-														'mr-2 size-4',
-														selectedCategoryId !== category.id && 'text-transparent'
-													)}
-												/>
-												{category.name}
-											</Command.Item>
-										{/each}
-									</Command.Group>
-								</Command.List>
-							</Command.Root>
-						</Popover.Content>
-					</Popover.Root>
+					<CategoryCombobox
+						categories={categories}
+						bind:selectedId={selectedCategoryId}
+						name="categoryId" 
+						label="Category"
+						placeholder="Select a category..."
+					/>
 				</div>
 
 				<!-- Tags -->
