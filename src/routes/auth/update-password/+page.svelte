@@ -58,81 +58,27 @@
     <title>Update Password</title>
 </svelte:head>
 
-<div class="update-password-container">
-    <h1>Set Your New Password</h1>
+<div class="max-w-md mx-auto my-8 p-8 border border-gray-200 rounded-lg shadow-sm">
+    <h1 class="text-2xl font-bold mb-4">Set Your New Password</h1>
 
     {#if message}
-        <p class="message success">{message}</p>
+        <p class="p-3 mb-4 rounded-md bg-green-50 text-green-700 border border-green-200">{message}</p>
     {/if}
     {#if error}
-        <p class="message error">{error}</p>
+        <p class="p-3 mb-4 rounded-md bg-red-50 text-red-700 border border-red-200">{error}</p>
     {/if}
 
-    <form onsubmit={handlePasswordUpdate}>
-        <label>
-            New Password:
-            <input type="password" bind:value={password} required minlength="6" />
+    <form onsubmit={handlePasswordUpdate} class="flex flex-col gap-4 mt-4">
+        <label class="flex flex-col">
+            <span class="mb-1">New Password:</span>
+            <input type="password" bind:value={password} required minlength="6" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </label>
-        <label>
-            Confirm New Password:
-            <input type="password" bind:value={confirmPassword} required minlength="6" />
+        <label class="flex flex-col">
+            <span class="mb-1">Confirm New Password:</span>
+            <input type="password" bind:value={confirmPassword} required minlength="6" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </label>
-        <button type="submit" disabled={loading}>
+        <button type="submit" disabled={loading} class="py-3 px-4 bg-gray-800 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50 disabled:opacity-50 disabled:bg-gray-500 disabled:cursor-not-allowed mt-2">
             {#if loading}Updating...{:else}Update Password{/if}
         </button>
     </form>
 </div>
-
-<style>
-    .update-password-container {
-        max-width: 400px;
-        margin: 2rem auto;
-        padding: 2rem;
-        border: 1px solid #ccc;
-        border-radius: 8px;
-    }
-    form {
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-        margin-top: 1rem;
-    }
-    label {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    input {
-        width: 100%;
-        padding: 0.5rem;
-        margin-top: 0.25rem;
-        box-sizing: border-box;
-    }
-    button {
-        padding: 0.75rem;
-        cursor: pointer;
-        background-color: #333;
-        color: white;
-        border: none;
-        border-radius: 4px;
-    }
-    button:disabled {
-        background-color: #999;
-        cursor: not-allowed;
-    }
-    .message {
-        padding: 0.75rem;
-        border-radius: 4px;
-        margin-bottom: 1rem;
-    }
-    .message.success {
-        background-color: #e6fffa;
-        color: #2c7a7b;
-        border: 1px solid #b2f5ea;
-    }
-    .message.error {
-        background-color: #ffebeb;
-        color: #c53030;
-        border: 1px solid #fed7d7;
-    }
-</style> 

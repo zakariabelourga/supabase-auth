@@ -96,14 +96,14 @@
 	</div>
 
 	{#if form?.message && form?.status !== 201}
-		<div class="alert {form.status && form.status < 400 ? 'alert-success' : 'alert-error'} mb-4">
+		<div class={`p-4 mb-4 rounded-md ${form.status && form.status < 400 ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
 			<span>{form.message}</span>
 		</div>
 	{/if}
 
 	{#if items.length > 0}
 		<div class="overflow-x-auto">
-			<table class="table table-zebra w-full">
+			<table class="w-full">
 				<thead>
 					<tr>
 						<th>Name</th>
@@ -125,7 +125,7 @@
 							<td>
 								{#if item.tags && item.tags.length > 0}
 									{#each item.tags as tag (tag.id)}
-										<span class="badge badge-outline mr-1">{tag.name}</span>
+										<span class="mr-1">{tag.name}</span>
 									{/each}
 								{:else}
 									-
@@ -133,7 +133,7 @@
 							</td>
 							<td>{new Date(item.expiration).toLocaleDateString()}</td>
 							<td>
-								<a href={`/app/items/${item.id}`} class="btn btn-xs btn-ghost">View</a>
+								<a href={`/app/items/${item.id}`} class="inline-flex items-center px-2 py-1 text-xs rounded hover:bg-gray-100">View</a>
 								<form 
 									method="POST" 
 									action="?/deleteItem" 
@@ -148,7 +148,7 @@
 									<input type="hidden" name="itemId" value={item.id} />
 									<button 
 										type="submit" 
-										class="btn btn-xs btn-ghost text-error"
+										class="inline-flex items-center px-2 py-1 text-xs rounded hover:bg-gray-100 text-red-600"
 									>
 										Delete
 									</button>
@@ -168,7 +168,3 @@
 		</div>
 	{/if}
 </div>
-
-<style>
-	/* Add any component-specific styles here */
-</style> 

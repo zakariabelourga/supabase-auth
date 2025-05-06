@@ -164,7 +164,7 @@
 			<!-- Display Message from Parent ($form / formResult prop) -->
 			{#if formResult?.message && ((formValues?.itemId === item?.id && isEditMode) || (!isEditMode && !formValues?.isUpdate) || formValues?.isUpdate === isEditMode)}
 				<div
-					class={`alert ${(formResult.status && formResult.status < 400) || formResult.itemUpdatedButTagsFailed ? 'alert-success' : 'alert-error'} mb-4`}
+					class={`rounded-md p-4 mb-4 ${(formResult.status && formResult.status < 400) || formResult.itemUpdatedButTagsFailed ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}
 				>
 					<span>{formResult.message}</span>
 				</div>
@@ -181,33 +181,33 @@
 			<!-- Input Fields -->
 			<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 				<!-- Item Name -->
-				<div class="form-control mb-4">
+				<div class="mb-4">
 					<Label for="name">Item Name*</Label>
 					<Input
 						id="name"
 						name="name"
 						type="text"
 						required
-						class="input input-bordered w-full"
+						class="w-full"
 						bind:value={nameInputValue}
 					/>
 				</div>
 
 				<!-- Expiration Date -->
-				<div class="form-control mb-4">
+				<div class="mb-4">
 					<Label for="expiration">Expiration Date*</Label>
 					<Input
 						id="expiration"
 						name="expiration"
 						type="date"
 						required
-						class="input input-bordered w-full"
+						class="w-full"
 						bind:value={expirationInputValue}
 					/>
 				</div>
 
 				<!-- Entity Input with Combobox Popover -->
-				<div class="form-control mb-4">
+				<div class="mb-4">
 					<EntityCombobox
 						entities={entities}
 						bind:value={entityInputValue}
@@ -219,7 +219,7 @@
 				</div>
 
 				<!-- Category Combobox -->
-				<div class="form-control mb-4">
+				<div class="mb-4">
 					<CategoryCombobox
 						categories={categories}
 						bind:selectedId={selectedCategoryId}
@@ -230,31 +230,31 @@
 				</div>
 
 				<!-- Tags -->
-				<div class="form-control mb-4 sm:col-span-2">
+				<div class="mb-4 sm:col-span-2">
 					<Label for="tags">Tags (comma-separated)</Label>
 					<Input
 						id="tags"
 						name="tags"
 						type="text"
-						class="input input-bordered w-full"
+						class="w-full"
 						bind:value={tagsInputValue}
 					/>
 				</div>
 			</div>
 
 			<!-- Description -->
-			<div class="form-control mb-4">
+			<div class="mb-4">
 				<Label for="description">Description</Label>
 				<Textarea
 					id="description"
 					name="description"
-					class="textarea textarea-bordered w-full"
+					class="w-full"
 					bind:value={descriptionInputValue}
 				></Textarea>
 			</div>
 
 			<Dialog.Footer>
-				<Button type="submit" class="btn btn-primary" disabled={isSubmitting}>
+				<Button type="submit" disabled={isSubmitting}>
 					{#if isSubmitting}
 						<Loader class="mr-2 animate-spin" />
 					{/if}

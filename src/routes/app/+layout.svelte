@@ -18,47 +18,18 @@
     };
 </script>
 
-<div class="private-layout">
-    <header>
-        <nav>
-            <a href="/">Home</a>
+<div class="min-h-screen flex flex-col">
+    <header class="bg-gray-100 py-4 px-4 border-b border-gray-200">
+        <nav class="flex gap-4 items-center">
+            <a href="/" class="text-blue-600 hover:text-blue-800">Home</a>
             {#if session}
-                <span>Logged in as: {session.user.email}</span>
-                <a href="/app/account">Account</a> <!-- Link to an example account page -->
-                <button onclick={handleLogout}>Logout</button>
+                <span class="text-gray-600">Logged in as: {session.user.email}</span>
+                <a href="/app/account" class="text-blue-600 hover:text-blue-800">Account</a> <!-- Link to an example account page -->
+                <button onclick={handleLogout} class="text-blue-600 hover:text-blue-800">Logout</button>
             {/if}
         </nav>
     </header>
-    <main>
+    <main class="flex-grow p-4">
         {@render children()}
     </main>
 </div>
-
-<style>
-    .private-layout header {
-        background-color: #f0f0f0;
-        padding: 1rem;
-        border-bottom: 1px solid #ddd;
-    }
-    nav {
-        display: flex;
-        gap: 1rem;
-        align-items: center;
-    }
-    nav a,
-    nav button {
-        text-decoration: none;
-        color: #333;
-        cursor: pointer;
-    }
-    nav button {
-        padding: 0.5rem 1rem;
-        border: 1px solid #ccc;
-        background-color: white;
-        border-radius: 4px;
-        margin-left: auto; /* Push logout button to the right */
-    }
-    main {
-        padding: 1rem;
-    }
-</style> 

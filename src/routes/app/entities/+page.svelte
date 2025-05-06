@@ -82,7 +82,7 @@
                 editingEntity = null; // Ensure add mode
                 showForm = !showForm; 
             }}
-            class="btn btn-primary"
+            class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={showForm && isEditMode} 
         > <!-- Disable add while editing -->
             {showForm && !isEditMode ? 'Cancel' : '+ Add New Entity'}
@@ -91,9 +91,9 @@
 
     <!-- Add/Edit Entity Form -->
     {#if showForm}
-        <div class="card bg-base-200 shadow-xl mb-6">
-            <div class="card-body">
-                <h2 class="card-title mb-4">{isEditMode ? 'Edit Entity' : 'Add New Entity'}</h2>
+        <div class="bg-white rounded-lg shadow-lg mb-6 overflow-hidden">
+            <div class="p-6">
+                <h2 class="text-xl font-semibold mb-4">{isEditMode ? 'Edit Entity' : 'Add New Entity'}</h2>
                 <form 
                     method="POST" 
                     action={isEditMode ? '?/updateEntity' : '?/addEntity'} 
@@ -101,7 +101,7 @@
                     bind:this={formRef}
                 > 
                     {#if form?.message && ( (form as any).values?.entityId === editingEntity?.id || !(form as any).values?.isUpdate )}
-                        <div class={`alert ${form.status && form.status < 400 ? 'alert-success' : 'alert-error'} mb-4`}>
+                        <div class={`p-4 mb-4 rounded-md ${form.status && form.status < 400 ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
                             <span>{form.message}</span>
                         </div>
                     {/if}
@@ -111,36 +111,36 @@
                         <input type="hidden" name="entityId" value={editingEntity?.id} />
                     {/if}
 
-                    <div class="form-control mb-4">
-                        <label for="name" class="label">
-                            <span class="label-text">Entity Name*</span>
+                    <div class="mb-4">
+                        <label for="name" class="block text-sm font-medium text-gray-700 mb-1">
+                            Entity Name*
                         </label>
                         <input 
                             id="name" 
                             name="name" 
                             type="text" 
                             required 
-                            class="input input-bordered w-full" 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" 
                             value={isEditMode ? (form as any)?.values?.name ?? editingEntity?.name ?? '' : (form as any)?.values?.name ?? ''}
                         />
                     </div>
 
-                    <div class="form-control mb-4">
-                        <label for="description" class="label">
-                            <span class="label-text">Description</span>
+                    <div class="mb-4">
+                        <label for="description" class="block text-sm font-medium text-gray-700 mb-1">
+                            Description
                         </label>
                         <textarea 
                             id="description" 
                             name="description" 
-                            class="textarea textarea-bordered w-full" 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" 
                             value={isEditMode ? (form as any)?.values?.description ?? editingEntity?.description ?? '' : (form as any)?.values?.description ?? ''}
                         ></textarea>
                     </div>
 
-                    <div class="card-actions justify-end">
-                        <button type="button" onclick={cancelForm} class="btn btn-ghost">Cancel</button>
-                        <button type="submit" class="btn btn-primary" disabled={isSubmitting}>
-                            {#if isSubmitting} <span class="loading loading-spinner"></span> {/if}
+                    <div class="flex justify-end space-x-2">
+                        <button type="button" onclick={cancelForm} class="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed" disabled={isSubmitting}>
+                            {#if isSubmitting} <span class="inline-block animate-spin mr-2">⟳</span> {/if}
                             {isSubmitting ? (isEditMode ? 'Updating...' : 'Adding...') : (isEditMode ? 'Update Entity' : 'Add Entity')}
                         </button>
                     </div>
@@ -152,24 +152,24 @@
     <!-- Entities List -->
     {#if entities.length > 0}
         <div class="overflow-x-auto">
-            <table class="table table-zebra w-full">
-                <thead>
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
                     <tr>
-                        <th>Name</th>
-                        <th>Description</th>
-                        <th>Created At</th>
-                        <th>Actions</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created At</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                     </tr>
                 </thead>
-                <tbody>
-                    {#each entities as entity (entity.id)}
-                        <tr>
-                            <td>{entity.name}</td>
-                            <td>{entity.description ?? '-'}</td>
-                            <td>{new Date(entity.created_at).toLocaleDateString()}</td>
-                            <td>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {#each entities as entity, i (entity.id)}
+                        <tr class={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                            <td class="px-6 py-4 whitespace-nowrap">{entity.name}</td>
+                            <td class="px-6 py-4 whitespace-nowrap">{entity.description ?? '-'}</td>
+                            <td class="px-6 py-4 whitespace-nowrap">{new Date(entity.created_at).toLocaleDateString()}</td>
+                            <td class="px-6 py-4 whitespace-nowrap space-x-2">
                                 <button 
-                                    class="btn btn-xs btn-ghost" 
+                                    class="text-sm px-2 py-1 text-blue-600 hover:text-blue-800 disabled:opacity-50 disabled:cursor-not-allowed" 
                                     onclick={() => startEditing(entity)}
                                     disabled={showForm} 
                                 > <!-- Disable edit while form is open-->
@@ -180,7 +180,7 @@
                                     method="POST" 
                                     action="?/deleteEntity" 
                                     use:enhance 
-                                    style="display: inline;" 
+                                    class="inline" 
                                     onsubmit={() => { 
                                         if (!confirm('Are you sure you want to delete this entity? Items using it will be unlinked.')) {
                                             return false; // Prevent form submission if user cancels
@@ -191,7 +191,7 @@
                                     <input type="hidden" name="entityId" value={entity.id} />
                                     <button 
                                         type="submit" 
-                                        class="btn btn-xs btn-ghost text-error"
+                                        class="text-sm px-2 py-1 text-red-600 hover:text-red-800 disabled:opacity-50 disabled:cursor-not-allowed"
                                         disabled={showForm} 
                                     > <!-- Disable delete while form is open-->
                                         Delete
@@ -209,7 +209,3 @@
         </p>
     {/if}
 </div>
-
-<style>
-    /* Add component-specific styles if needed */
-</style> 

@@ -60,7 +60,7 @@
 	}
 </script>
 
-<div class="form-control">
+<div>
 	{#if label}
 		<Label for={inputId}>{label}</Label>
 	{/if}
@@ -70,7 +70,7 @@
 			id={inputId}
 			{name}
 			type="text"
-			class="input input-bordered w-full pr-10"
+			class="w-full pr-10"
 			{placeholder}
 			bind:value
 			oninput={handleInput}
@@ -122,4 +122,4 @@
 			</Popover.Content>
 		</Popover.Root>
 	</div>
-</div> 
+</div>

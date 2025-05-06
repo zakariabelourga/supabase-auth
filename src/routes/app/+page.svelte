@@ -8,31 +8,12 @@
     <title>Dashboard</title>
 </svelte:head>
 
-<div class="private-home">
-    <h1>Private Dashboard</h1>
-    <p>Welcome to the protected area!</p>
-    <p>You are successfully logged in.</p>
+<div class="container mx-auto p-4 md:p-8">
+    <h1 class="text-3xl font-bold mb-4">Private Dashboard</h1>
+    <p class="mb-2">Welcome to the protected area!</p>
+    <p class="mb-6">You are successfully logged in.</p>
     
-    <p>Manage your account details:</p>
-    <a href="/app/account">Go to Account Page</a>
+    <p class="mb-2">Manage your account details:</p>
+    <a href="/app/account" class="inline-block px-4 py-2 bg-gray-100 text-gray-800 border border-gray-300 rounded-md hover:bg-gray-200 transition-colors">Go to Account Page</a>
 </div>
-
-<style>
-    .private-home {
-        padding: 1rem;
-    }
-    a {
-        display: inline-block;
-        margin-top: 1rem;
-        padding: 0.5rem 1rem;
-        background-color: #eee;
-        color: #333;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        text-decoration: none;
-    }
-    a:hover {
-        background-color: #ddd;
-    }
-</style>
 

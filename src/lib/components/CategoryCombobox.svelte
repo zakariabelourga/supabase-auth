@@ -47,7 +47,7 @@
 	}
 </script>
 
-<div class="form-control">
+<div>
 	{#if label}
 		<Label for={triggerRef?.id}>{label}</Label>
 	{/if}
@@ -106,4 +106,4 @@
 			</Command.Root>
 		</Popover.Content>
 	</Popover.Root>
-</div> 
+</div>
