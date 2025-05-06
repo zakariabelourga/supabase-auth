@@ -11,9 +11,11 @@
 	import * as Command from '$lib/components/ui/command/index.js';
 	import Check from '@lucide/svelte/icons/check';
 	import ChevronsUpDown from '@lucide/svelte/icons/chevrons-up-down';
+	import Building2 from '@lucide/svelte/icons/building-2';
 	import { tick } from 'svelte';
 	import { cn } from '$lib/utils.js';
 	import Loader from '@lucide/svelte/icons/loader';
+	import EntityCombobox from '$lib/components/EntityCombobox.svelte';
 
 	// --- Component Props ---
 	type Category = { id: string; name: string };
@@ -83,6 +85,9 @@
 	let descriptionInputValue = $state('');
 	// --- End Input State ---
 
+	// --- Entity Combobox State ---
+	// Removed entity combobox states: entityComboboxOpen, entitySearchValue, entityTriggerRef
+
 	// --- Helper Functions ---
 	function formatTagsForInput(tags: ItemTag[] | undefined | null): string {
 		if (!tags) return '';
@@ -114,7 +119,7 @@
 			await update();
 			// Now that the update is done, explicitly reset the submitting state
 			isSubmitting = false;
-			
+
 			// If the form was successful, close the dialog
 			if (result.type === 'success' && !result.data?.values) {
 				onOpenChange(false);
@@ -160,17 +165,17 @@
 </script>
 
 <!-- Item form in dialog -->
-<Dialog.Root bind:open={open} onOpenChange={onOpenChange}>
+<Dialog.Root bind:open {onOpenChange}>
 	<Dialog.Content class="sm:max-w-[600px]">
 		<Dialog.Header>
 			<Dialog.Title>{isEditMode ? 'Edit Item' : 'Add New Item'}</Dialog.Title>
 			<Dialog.Description>
-				{isEditMode 
-					? 'Update the details of your item below.' 
+				{isEditMode
+					? 'Update the details of your item below.'
 					: 'Fill in the details to add a new item.'}
 			</Dialog.Description>
 		</Dialog.Header>
-		
+
 		<form
 			method="POST"
 			action={isEditMode ? '?/updateItem' : '?/addItem'}
@@ -223,27 +228,16 @@
 					/>
 				</div>
 
-				<!-- Entity Input with Datalist -->
+				<!-- Entity Input with Combobox Popover -->
 				<div class="form-control mb-4">
-					<Label for="entityNameManual">Provider / Entity</Label>
-					<Input
-						id="entityNameManual"
-						name="entityNameManual"
-						type="text"
-						class="input input-bordered w-full"
-						list="entities-list"
-						placeholder="Type or select an entity"
+					<EntityCombobox
+						entities={entities}
 						bind:value={entityInputValue}
+						name="entityNameManual"
+						inputId="entityNameManual"
+						label="Provider / Entity"
+						placeholder="Type or select an entity"
 					/>
-					<datalist id="entities-list">
-						{#each entities as entity}
-							<option value={entity.name}
-								>{entity.description
-									? `${entity.name} (${entity.description})`
-									: entity.name}</option
-							>
-						{/each}
-					</datalist>
 				</div>
 
 				<!-- Category Combobox -->
@@ -330,12 +324,9 @@
 			</div>
 
 			<Dialog.Footer>
-				<Button
-					type="submit"
-					class="btn btn-primary"
-					disabled={isSubmitting}>
+				<Button type="submit" class="btn btn-primary" disabled={isSubmitting}>
 					{#if isSubmitting}
-						<Loader class="animate-spin mr-2" />
+						<Loader class="mr-2 animate-spin" />
 					{/if}
 					{isSubmitting
 						? isEditMode
