@@ -219,10 +219,12 @@ export const actions: Actions = {
 						.insert(allTagIds.map((tagId) => ({ item_id: newItemId, tag_id: tagId })));
 				if (itemTagsError) throw itemTagsError;
 				}
-			} catch (tagError: any) {
+			} catch (tagError: unknown) {
 				console.error('Error handling tags:', tagError);
+				// Safely extract error message from unknown type
+				const errorMessage = tagError instanceof Error ? tagError.message : String(tagError);
 				return fail(500, {
-					message: `Item added, but failed to process tags: ${tagError.message}`,
+					message: `Item added, but failed to process tags: ${errorMessage}`,
 					values: { name, description, categoryId, expiration, tagsString, entityId: entityIdInput, entityNameManual: entityNameManualInput }, // Pass back entity inputs
 					itemAddedButTagsFailed: true
 				});
@@ -271,4 +273,4 @@ export const actions: Actions = {
             message: 'Item deleted successfully.' 
         };
     }
-}; 
+};
