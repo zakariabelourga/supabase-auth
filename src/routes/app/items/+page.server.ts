@@ -149,7 +149,7 @@ export const actions: Actions = {
 
 		const newItemId = newItemData.id;
 
-		// --- 2. Handle Tags (Keep existing logic) ---
+		// --- 2. Handle Tags ---
 		const tagNames =
 			tagsString
 				?.split(',')
@@ -226,7 +226,7 @@ export const actions: Actions = {
         const { error } = await supabase
             .from('items')
             .delete()
-            .match({ id: itemId, user_id: session.user.id }); // Match user ID!
+            .match({ id: itemId, user_id: session.user.id }); // Match user ID
 
         if (error) {
             console.error('Error deleting item:', error);
@@ -238,7 +238,7 @@ export const actions: Actions = {
 
         // Success - enhance handles UI update by reloading data
         return { 
-            status: 200, // OK
+            status: 200,
             message: 'Item deleted successfully.' 
         };
     }

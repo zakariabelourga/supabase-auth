@@ -7,7 +7,7 @@
 	import { tick } from 'svelte';
 	import { cn } from '$lib/utils.js';
 	import { Label } from '$lib/components/ui/label/index.js';
-	import type { Category } from '$lib/types'; // Import Category type
+	import type { Category } from '$lib/types';
 
 	let {
 		categories = [] as Category[],

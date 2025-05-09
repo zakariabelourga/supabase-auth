@@ -21,16 +21,16 @@
 	};
 
 	let {
-		item = $bindable(null as ItemEntry | null), // Use ItemEntry
-		categories = [] as Category[], // Use imported Category
-		entities = [] as Entity[], // Use imported Entity
+		item = $bindable(null as ItemEntry | null),
+		categories = [] as Category[],
+		entities = [] as Entity[],
 		formResult = $bindable(null as ItemFormResult | null | undefined), // Bindable prop for parent's $form
-		open = $bindable(false), // Dialog open state
+		open = $bindable(false),
 		onOpenChange = $bindable((value: boolean) => {}) // Callback for dialog open state changes
 	}: {
-		item?: ItemEntry | null; // Use ItemEntry
-		categories?: Category[]; // Use imported Category
-		entities?: Entity[]; // Use imported Entity
+		item?: ItemEntry | null;
+		categories?: Category[];
+		entities?: Entity[];
 		formResult?: ItemFormResult | null | undefined;
 		open?: boolean;
 		onOpenChange?: (value: boolean) => void;
@@ -52,12 +52,10 @@
 
 	// --- Helper Functions ---
 	function formatTagsForInput(tags: Tag[] | undefined | null): string {
-		// Use Tag
 		if (!tags) return '';
 		return tags.map((t) => t.name).join(', ');
 	}
 	function getEntityInputValue(currentItem: ItemEntry | null): string {
-		// Use ItemEntry
 		if (!currentItem) return '';
 		return currentItem.entity?.name ?? currentItem.entity_name_manual ?? '';
 	}

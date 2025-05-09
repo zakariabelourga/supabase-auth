@@ -4,16 +4,16 @@
 	import * as Popover from '$lib/components/ui/popover/index.js';
 	import * as Command from '$lib/components/ui/command/index.js';
 	import Check from '@lucide/svelte/icons/check';
-	import Building2 from '@lucide/svelte/icons/building-2'; // Using Building2 as per your latest changes
+	import Building2 from '@lucide/svelte/icons/building-2';
 	import { tick } from 'svelte';
 	import { cn } from '$lib/utils.js';
-	import type { Entity } from '$lib/types'; // Import Entity type
+	import type { Entity } from '$lib/types';
 
 	let {
 		entities = [] as Entity[],
 		value = $bindable(''),
 		label = 'Provider / Entity',
-		name = 'entityNameManual', // Name for the form input
+		name = 'entityNameManual',
 		placeholder = 'Type or select an entity',
 		inputId = 'entityNameManual'
 	}: {
@@ -40,7 +40,6 @@
 
 	function closeComboboxAndFocusInput() {
 		comboboxOpen = false;
-		// searchValue = ''; // Clear search on close, consider if this is desired UX
 		tick().then(() => {
 			inputFieldRef?.focus();
 		});
