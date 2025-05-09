@@ -1,36 +1,7 @@
-import { fail, redirect, type Actions, type RequestEvent } from '@sveltejs/kit';
+import { fail, redirect, type Actions } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { error as svelteKitError } from '@sveltejs/kit';
-import type { SupabaseClient, Session } from '@supabase/supabase-js';
-
-// Reusable types (consider moving to a dedicated types file, e.g., src/lib/types.ts)
-interface Entity {
-    id: string;
-    name: string;
-    description: string | null;
-}
-
-interface ItemNote {
-    id: string;
-    note_text: string;
-    created_at: string;
-    updated_at: string;
-    // user_id is implicitly handled by RLS
-}
-
-interface ItemWithRelations {
-	id: string;
-	name: string;
-	description: string | null;
-	expiration: string;
-	created_at: string;
-	updated_at: string;
-	category: { id: string; name: string } | null;
-	tags: { id: string; name: string }[];
-    entity: { id: string; name: string } | null;
-    entity_name_manual: string | null;
-    item_notes: ItemNote[]; // Add notes relation
-}
+import type { Entity, ItemDetail as ItemWithRelations } from '$lib/types';
 
 export const load: PageServerLoad = async ({ params, locals: { supabase, session } }) => {
 	if (!session) {
@@ -38,6 +9,10 @@ export const load: PageServerLoad = async ({ params, locals: { supabase, session
 	}
 
     const itemId = params.itemId;
+
+	if (!itemId) {
+		svelteKitError(400, { message: 'Item ID is missing from parameters.' });
+	}
 
 	// Fetch the specific item, ensuring it belongs to the user, joining relations including notes
 	const { data: itemData, error: itemError } = await supabase
@@ -109,6 +84,10 @@ export const actions: Actions = {
             return fail(401, { noteError: 'Unauthorized' });
         }
         const itemId = params.itemId;
+
+        if (!itemId) {
+            return fail(400, { noteError: 'Item ID is missing from parameters.' });
+        }
         const formData = await request.formData();
         const noteText = formData.get('noteText') as string | null;
 
@@ -162,6 +141,10 @@ export const actions: Actions = {
             return fail(401, { message: 'Unauthorized' });
         }
         const itemId = params.itemId;
+
+        if (!itemId) {
+            return fail(400, { message: 'Item ID is missing from parameters.' });
+        }
         const formData = await request.formData();
         // const itemId = formData.get('itemId') as string | null; // No longer needed from form
         const name = formData.get('name') as string | null;
@@ -208,7 +191,7 @@ export const actions: Actions = {
                 expiration: expiration,
                 entity_id: entityIdToSave,
                 entity_name_manual: entityNameManualToSave,
-                updated_at: new Date()
+                updated_at: new Date().toISOString()
             })
             .match({ id: itemId, user_id: session.user.id });
 
@@ -280,10 +263,12 @@ export const actions: Actions = {
                 if (unlinkTagsErr) throw unlinkTagsErr;
             }
 
-        } catch (tagError: any) {
+        } catch (tagError: unknown) {
             console.error('Error updating tags:', tagError);
+            // Safely extract error message from unknown type
+				const errorMessage = tagError instanceof Error ? tagError.message : String(tagError);
             return fail(500, {
-                message: `Item updated, but failed to update tags: ${tagError.message}`,
+                message: `Item added, but failed to process tags: ${errorMessage}`,
                 values: { itemId, name, description, categoryId, expiration, tagsString, entityNameManual: entityNameManualInput },
                 isUpdate: true,
                 itemUpdatedButTagsFailed: true
@@ -298,7 +283,7 @@ export const actions: Actions = {
     },
 
     // --- deleteNote Action ---
-    deleteNote: async ({ request, params, locals }) => {
+    deleteNote: async ({ request, locals }) => {
         const { supabase, session } = locals;
         if (!session) {
             return fail(401, { noteDeleteError: 'Unauthorized' });
@@ -306,7 +291,6 @@ export const actions: Actions = {
 
         const formData = await request.formData();
         const noteId = formData.get('noteId') as string | null;
-        const itemId = params.itemId; // For context if needed, but RLS checks user_id on note
 
         if (!noteId) {
             return fail(400, { noteDeleteError: 'Missing note ID.' });
@@ -331,7 +315,7 @@ export const actions: Actions = {
     },
 
     // --- updateNote Action ---
-    updateNote: async ({ request, params, locals }) => {
+    updateNote: async ({ request, locals }) => {
         const { supabase, session } = locals;
         if (!session) {
             return fail(401, { noteUpdateError: 'Unauthorized' });
@@ -340,7 +324,6 @@ export const actions: Actions = {
         const formData = await request.formData();
         const noteId = formData.get('noteId') as string | null;
         const noteText = formData.get('noteText') as string | null;
-        const itemId = params.itemId; // Context
 
         // Validation
         if (!noteId) {
@@ -372,4 +355,4 @@ export const actions: Actions = {
 
         return { noteUpdateSuccess: 'Note updated successfully.' };
     }
-}; 
+};

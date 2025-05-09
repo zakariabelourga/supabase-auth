@@ -4,20 +4,7 @@
 	import ItemForm from '$lib/components/ItemForm.svelte';
 	import PlusCircle from '@lucide/svelte/icons/plus-circle';
 	import { Button } from '$lib/components/ui/button/index.js';
-
-	// Define Item type matching the server load more closely
-	type Item = {
-		id: string;
-		name: string;
-		description: string | null;
-		expiration: string;
-		created_at: string;
-		updated_at: string;
-		category: { id: string; name: string } | null;
-		tags: { id: string; name: string }[];
-		entity: { id: string; name: string } | null;
-		entity_name_manual: string | null;
-	};
+	import type { ItemEntry as Item, Category, Entity as LinkedEntity } from '$lib/types';
 
 	let { data, form } = $props();
 	let { items, categories, entities } = $derived(data);

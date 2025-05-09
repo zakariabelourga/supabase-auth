@@ -1,26 +1,7 @@
 import { fail, redirect, type Actions } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { error as svelteKitError } from '@sveltejs/kit';
-import type { SupabaseClient, Session } from '@supabase/supabase-js';
-import { AuthApiError } from '@supabase/supabase-js'; // Import for specific error checking
-
-// Define a type for the event object enriched by hooks
-type AuthenticatedEvent = {
-	locals: {
-		supabase: SupabaseClient;
-		session: Session | null;
-	};
-	request: Request;
-	params?: Partial<Record<string, string>>;
-};
-
-// Define the structure of an entity (can be reused or imported)
-interface Entity {
-	id: string;
-	name: string;
-	description: string | null;
-	created_at: string;
-}
+import type { AuthenticatedEvent, Entity } from '$lib/types';
 
 export const load: PageServerLoad = async ({ locals: { supabase, session } }) => {
 	if (!session) {
@@ -194,4 +175,4 @@ export const actions: Actions = {
             message: `Entity "${trimmedName}" updated successfully.`
         }; 
     }
-}; 
+};

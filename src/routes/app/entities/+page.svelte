@@ -1,14 +1,7 @@
 <script lang="ts">
     import { enhance } from '$app/forms';
     import { type SubmitFunction } from '@sveltejs/kit';
-
-    // Define Entity type matching the server load
-    type Entity = {
-        id: string;
-        name: string;
-        description: string | null;
-        created_at: string;
-    }
+    import type { Entity } from '$lib/types';
 
     let { data, form } = $props();
     let { entities } = $derived(data);

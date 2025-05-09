@@ -7,8 +7,7 @@
 	import Building2 from '@lucide/svelte/icons/building-2'; // Using Building2 as per your latest changes
 	import { tick } from 'svelte';
 	import { cn } from '$lib/utils.js';
-
-	type Entity = { id: string; name: string; description: string | null };
+	import type { Entity } from '$lib/types'; // Import Entity type
 
 	let {
 		entities = [] as Entity[],

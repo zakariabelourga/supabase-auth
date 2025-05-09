@@ -1,30 +1,15 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { type SubmitFunction } from '@sveltejs/kit';
-	import type { ActionResult } from '@sveltejs/kit';
+	import { type SubmitFunction, type ActionResult } from '@sveltejs/kit';
+	import Loader from '@lucide/svelte/icons/loader';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
-	import Loader from '@lucide/svelte/icons/loader';
 	import EntityCombobox from '$lib/components/EntityCombobox.svelte';
 	import CategoryCombobox from '$lib/components/CategoryCombobox.svelte';
-
-	// --- Component Props ---
-	type Category = { id: string; name: string };
-	type Entity = { id: string; name: string; description: string | null };
-	type ItemTag = { id: string; name: string };
-	type Item = {
-		id: string;
-		name: string;
-		description: string | null;
-		expiration: string;
-		category: { id: string; name: string } | null;
-		tags: ItemTag[];
-		entity: { id: string; name: string } | null;
-		entity_name_manual: string | null;
-	} | null;
+	import type { Category, Entity, Tag, ItemEntry } from '$lib/types';
 
 	// Define a type for the expected form result structure (can be more specific)
 	type ItemFormResult = ActionResult & {
@@ -36,16 +21,16 @@
 	};
 
 	let {
-		item = $bindable(null),
-		categories = [] as Category[], // Use plain default array
-		entities = [] as Entity[], // Use plain default array
+		item = $bindable(null as ItemEntry | null), // Use ItemEntry
+		categories = [] as Category[], // Use imported Category
+		entities = [] as Entity[], // Use imported Entity
 		formResult = $bindable(null as ItemFormResult | null | undefined), // Bindable prop for parent's $form
 		open = $bindable(false), // Dialog open state
 		onOpenChange = $bindable((value: boolean) => {}) // Callback for dialog open state changes
 	}: {
-		item?: Item | null;
-		categories?: Category[];
-		entities?: Entity[];
+		item?: ItemEntry | null; // Use ItemEntry
+		categories?: Category[]; // Use imported Category
+		entities?: Entity[]; // Use imported Entity
 		formResult?: ItemFormResult | null | undefined;
 		open?: boolean;
 		onOpenChange?: (value: boolean) => void;
@@ -66,11 +51,13 @@
 	let descriptionInputValue = $state('');
 
 	// --- Helper Functions ---
-	function formatTagsForInput(tags: ItemTag[] | undefined | null): string {
+	function formatTagsForInput(tags: Tag[] | undefined | null): string {
+		// Use Tag
 		if (!tags) return '';
 		return tags.map((t) => t.name).join(', ');
 	}
-	function getEntityInputValue(currentItem: Item | null): string {
+	function getEntityInputValue(currentItem: ItemEntry | null): string {
+		// Use ItemEntry
 		if (!currentItem) return '';
 		return currentItem.entity?.name ?? currentItem.entity_name_manual ?? '';
 	}
@@ -164,7 +151,7 @@
 			<!-- Display Message from Parent ($form / formResult prop) -->
 			{#if formResult?.message && ((formValues?.itemId === item?.id && isEditMode) || (!isEditMode && !formValues?.isUpdate) || formValues?.isUpdate === isEditMode)}
 				<div
-					class={`rounded-md p-4 mb-4 ${(formResult.status && formResult.status < 400) || formResult.itemUpdatedButTagsFailed ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}
+					class={`mb-4 rounded-md p-4 ${(formResult.status && formResult.status < 400) || formResult.itemUpdatedButTagsFailed ? 'border border-green-200 bg-green-50 text-green-700' : 'border border-red-200 bg-red-50 text-red-700'}`}
 				>
 					<span>{formResult.message}</span>
 				</div>
@@ -209,7 +196,7 @@
 				<!-- Entity Input with Combobox Popover -->
 				<div class="mb-4">
 					<EntityCombobox
-						entities={entities}
+						{entities}
 						bind:value={entityInputValue}
 						name="entityNameManual"
 						inputId="entityNameManual"
@@ -221,9 +208,9 @@
 				<!-- Category Combobox -->
 				<div class="mb-4">
 					<CategoryCombobox
-						categories={categories}
+						{categories}
 						bind:selectedId={selectedCategoryId}
-						name="categoryId" 
+						name="categoryId"
 						label="Category"
 						placeholder="Select a category..."
 					/>
@@ -232,13 +219,7 @@
 				<!-- Tags -->
 				<div class="mb-4 sm:col-span-2">
 					<Label for="tags">Tags (comma-separated)</Label>
-					<Input
-						id="tags"
-						name="tags"
-						type="text"
-						class="w-full"
-						bind:value={tagsInputValue}
-					/>
+					<Input id="tags" name="tags" type="text" class="w-full" bind:value={tagsInputValue} />
 				</div>
 			</div>
 

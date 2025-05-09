@@ -1,38 +1,7 @@
 import { fail, redirect, type Actions } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { error as svelteKitError } from '@sveltejs/kit';
-import type { SupabaseClient, Session } from '@supabase/supabase-js';
-
-// Define a type for the event object enriched by hooks
-type AuthenticatedEvent = {
-	locals: {
-		supabase: SupabaseClient;
-		session: Session | null;
-	};
-	request: Request;
-	params: Partial<Record<string, string>>;
-};
-
-// Define the structure of an entity
-interface Entity {
-    id: string;
-    name: string;
-    description: string | null; // Add other fields if needed
-}
-
-// Define the structure of an item with its relations
-interface ItemWithRelations {
-	id: string;
-	name: string;
-	description: string | null;
-	expiration: string; // Stored as date, retrieved as string
-	created_at: string;
-	updated_at: string;
-	category: { id: string; name: string } | null;
-	tags: { id: string; name: string }[];
-    entity: { id: string; name: string } | null; // Linked entity
-    entity_name_manual: string | null; // Manually entered name
-}
+import type { AuthenticatedEvent, Entity, ItemEntry as ItemWithRelations } from '$lib/types';
 
 export const load: PageServerLoad = async ({ locals: { supabase, session } }) => {
 	if (!session) {
