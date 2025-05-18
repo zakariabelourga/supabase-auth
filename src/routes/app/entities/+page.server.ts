@@ -2,25 +2,20 @@ import { fail, redirect, type Actions } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { error as svelteKitError } from '@sveltejs/kit';
 import type { AuthenticatedEvent, Entity } from '$lib/types';
+import { getEntitiesForUser, createEntity, updateEntity, deleteEntity } from '$lib/server/db/entities';
 
 export const load: PageServerLoad = async ({ locals: { supabase, session } }) => {
 	if (!session) {
 		redirect(303, '/auth'); // Protect the page
 	}
 
-	// Fetch user's entities
-	const { data: entitiesData, error: entitiesError } = await supabase
-		.from('entities')
-		.select('id, name, description, created_at')
-		.eq('user_id', session.user.id)
-		.order('name');
-
-	if (entitiesError) {
-		console.error('Error loading entities:', entitiesError);
-		svelteKitError(500, { message: `Could not load entities: ${entitiesError.message}` });
+	let entities: Entity[] = [];
+	try {
+		entities = await getEntitiesForUser(supabase, session.user.id);
+	} catch (error: any) {
+		console.error('Error loading entities:', error);
+		svelteKitError(500, { message: `Could not load entities: ${error.message}` });
 	}
-
-	const entities: Entity[] = (entitiesData as unknown as Entity[]) ?? [];
 
 	return {
 		entities: entities
@@ -47,37 +42,28 @@ export const actions: Actions = {
 
 		const trimmedName = name.trim();
 
-		// --- Insert Entity ---
-		const { error: insertError } = await supabase.from('entities').insert({
-			name: trimmedName,
-			description: description?.trim() || null,
-			user_id: session.user.id
-		});
-
-		if (insertError) {
-			console.error('Error adding entity:', insertError);
-
-			// Check for unique constraint violation (PostgreSQL code 23505)
-			if (insertError.code === '23505') {
-				return fail(409, { // 409 Conflict
+		try {
+			await createEntity(supabase, session.user.id, {
+				name: trimmedName,
+				description: description?.trim() || null
+			});
+			return {
+				status: 201, // Created
+				message: `Entity "${trimmedName}" added successfully.`
+			};
+		} catch (error: any) {
+			console.error('Error adding entity:', error);
+			if (error.code === '23505') { // Unique constraint violation
+				return fail(409, {
 					message: `An entity with the name "${trimmedName}" already exists.`,
 					values: { name, description }
 				});
 			}
-
 			return fail(500, {
-				message: `Database error adding entity: ${insertError.message}`,
+				message: `Database error adding entity: ${error.message}`,
 				values: { name, description }
 			});
-		}
-
-		// --- Success --- 
-        // Optionally return the newly created entity if needed immediately on the frontend
-        // For now, just return a success state. The page will reload data via enhance.
-		return { 
-            status: 201, // Created
-            message: `Entity "${trimmedName}" added successfully.`
-         }; 
+		} 
         // No redirect needed if using enhance, the page data should update.
 		// redirect(303, '/app/entities'); // Fallback if not using enhance
 	},
@@ -94,25 +80,19 @@ export const actions: Actions = {
             return fail(400, { message: 'Missing entity ID.' });
         }
 
-        // Delete the entity, ensuring it belongs to the current user
-        const { error } = await supabase
-            .from('entities')
-            .delete()
-            .match({ id: entityId, user_id: session.user.id });
-
-        if (error) {
+        try {
+            await deleteEntity(supabase, session.user.id, entityId);
+            return {
+                status: 200, // OK
+                message: 'Entity deleted successfully.'
+            };
+        } catch (error: any) {
             console.error('Error deleting entity:', error);
             return fail(500, {
                 message: `Database error deleting entity: ${error.message}`,
                 deleteErrorId: entityId // Pass back ID for potential UI feedback
             });
-        }
-
-        // Success
-        return { 
-            status: 200, // OK
-            message: 'Entity deleted successfully.'
-         }; 
+        } 
         // SvelteKit's enhance should handle the UI update by reloading data
     },
 
@@ -140,39 +120,37 @@ export const actions: Actions = {
 
         const trimmedName = name.trim();
 
-        // --- Update Entity ---
-        const { error: updateError } = await supabase
-            .from('entities')
-            .update({
+        try {
+            await updateEntity(supabase, session.user.id, entityId, {
                 name: trimmedName,
-                description: description?.trim() || null,
-                // user_id is not updated, but ensured by the match clause
-            })
-            .match({ id: entityId, user_id: session.user.id }); // IMPORTANT: Match user ID!
-
-        if (updateError) {
-            console.error('Error updating entity:', updateError);
-
-            // Check for unique constraint violation
-            if (updateError.code === '23505') {
-                return fail(409, { // 409 Conflict
+                description: description?.trim() || null
+            });
+            return {
+                status: 200, // OK
+                message: `Entity "${trimmedName}" updated successfully.`
+            };
+        } catch (error: any) {
+            console.error('Error updating entity:', error);
+            if (error.code === '23505') { // Unique constraint violation
+                return fail(409, {
                     message: `Another entity with the name "${trimmedName}" already exists.`,
                     values: { entityId, name, description },
                     isUpdate: true
                 });
             }
-
+            // Handle case where entity might not be found or other errors
+            if (error.message === 'Entity not found or update failed.') {
+                 return fail(404, { // Or 400/500 depending on how specific we want to be
+                    message: `Entity not found or you don't have permission to update it.`,
+                    values: { entityId, name, description },
+                    isUpdate: true
+                });
+            }
             return fail(500, {
-                message: `Database error updating entity: ${updateError.message}`,
+                message: `Database error updating entity: ${error.message}`,
                 values: { entityId, name, description },
                 isUpdate: true
             });
-        }
-
-        // --- Success ---
-        return { 
-            status: 200, // OK
-            message: `Entity "${trimmedName}" updated successfully.`
-        }; 
+        } 
     }
 };

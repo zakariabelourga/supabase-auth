@@ -11,6 +11,7 @@
     let editingEntity: Entity | null = $state(null);
     let isSubmitting = $state(false);
     let formRef: HTMLFormElement | null = $state(null);
+    let submissionAttempted = $state(false);
 
     // Compute form mode based on editingEntity state
     let isEditMode = $derived(!!editingEntity);
@@ -34,26 +35,33 @@
 
     // Reactive statement to handle form state after submission
     $effect(() => {
-        // Success (Add or Update)
-        if ((form?.status === 201 || form?.status === 200) && !(form as any)?.values) { 
-            cancelForm(); // Close form, clear editing state
-            formRef?.reset(); // Reset form fields
-            // Optionally show success toast: alert(form.message);
-        } 
-        // Error on Update: Keep form open and editingEntity set
-        else if (form?.status && form.status >= 400 && (form as any)?.values?.isUpdate) {
-            // The form remains open due to error, editingEntity remains set
-            // Error message is displayed via {#if form?.message}
-        }
-        // Error on Add: Keep form open, editingEntity remains null
-        else if (form?.status && form.status >= 400 && !(form as any)?.values?.isUpdate) {
-             // The form remains open due to error, editingEntity is null (correct for add mode)
-             // Error message is displayed
+        if (submissionAttempted) {
+            // A submission was attempted. Now check the 'form' state.
+            const isExplicitSuccess = form?.status && (form.status === 201 || form.status === 200) && !(form as any)?.values;
+            const isImplicitSuccess = form === undefined; // SvelteKit cleared the form after a successful action with no return data
+
+            if (isExplicitSuccess || isImplicitSuccess) {
+                cancelForm();
+                formRef?.reset();
+            }
+            // Error on Update: Keep form open and editingEntity set
+            else if (form?.status && form.status >= 400 && (form as any)?.values?.isUpdate) {
+                // The form remains open due to error, editingEntity remains set
+                // Error message is displayed via {#if form?.message}
+            }
+            // Error on Add: Keep form open, editingEntity remains null
+            else if (form?.status && form.status >= 400 && !(form as any)?.values?.isUpdate) {
+                 // The form remains open due to error, editingEntity is null (correct for add mode)
+                 // Error message is displayed
+            }
+
+            submissionAttempted = false; // Reset the flag after processing this submission's result
         }
     });
 
     const handleSubmit: SubmitFunction = () => {
         isSubmitting = true;
+        submissionAttempted = true; // Signal that a submission is underway
         return async ({ update }) => {
             await update(); 
             isSubmitting = false;
