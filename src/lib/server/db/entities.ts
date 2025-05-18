@@ -11,7 +11,7 @@ import type { Entity } from '$lib/types'; // Entity type from $lib/types
 export async function getEntitiesForUser(supabase: SupabaseClient, userId: string): Promise<Entity[]> {
 	const { data, error } = await supabase
 		.from('entities')
-		.select('id, name, description') // Assuming description is part of the Entity type
+		.select('id, name, description, created_at') // Assuming description and created_at are part of the Entity type
 		.eq('user_id', userId)
 		.order('name');
 
