@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ItemEntry, ItemDetail, Tag } from '$lib/types'; // ItemDetail includes notes and more comprehensive relations
+import { findOrCreateTagsForUser, linkTagsToItem, syncItemTags } from './tags';
 
 // Define a more specific return type if possible, or adjust ItemWithRelations
 // to accurately reflect what's being selected. For now, using ItemEntry for lists and ItemDetail for single item views.
@@ -135,7 +136,7 @@ export async function createItem(
 
 	const newItemId = newItemData.id;
 
-	// --- 3. Handle Tags ---
+	// --- 3. Handle Tags using Tag Service ---
 	const tagNames =
 		tagsString
 			?.split(',')
@@ -144,42 +145,12 @@ export async function createItem(
 
 	if (tagNames.length > 0) {
 		try {
-			let allTagIds: string[] = [];
-
-			// Find existing tags for the user
-			const { data: existingTags, error: existingTagsError } = await supabase
-				.from('tags')
-				.select('id, name')
-				.eq('user_id', userId)
-				.in('name', tagNames);
-
-			if (existingTagsError) throw existingTagsError;
-
-			const existingTagMap = new Map(existingTags.map((tag) => [tag.name, tag.id]));
-			allTagIds = existingTags.map((tag) => tag.id);
-
-			// Identify and insert new tags
-			const newTagNames = tagNames.filter((name) => !existingTagMap.has(name));
-			if (newTagNames.length > 0) {
-				const { data: insertedTags, error: insertTagsError } = await supabase
-					.from('tags')
-					.insert(newTagNames.map((name) => ({ name, user_id: userId })))
-					.select('id');
-
-				if (insertTagsError) throw insertTagsError;
-				allTagIds = allTagIds.concat(insertedTags.map((tag) => tag.id));
-			}
-
-			// Link item and tags
-			if (allTagIds.length > 0) {
-				const { error: itemTagsError } = await supabase
-					.from('item_tags')
-					.insert(allTagIds.map((tagId) => ({ item_id: newItemId, tag_id: tagId })));
-
-				if (itemTagsError) throw itemTagsError;
+			const tagIds = await findOrCreateTagsForUser(supabase, userId, tagNames);
+			if (tagIds.length > 0) {
+				await linkTagsToItem(supabase, newItemId, tagIds);
 			}
 		} catch (tagError: unknown) {
-			console.error('Error handling tags for new item:', tagError);
+			console.error('Error handling tags for new item via service:', tagError);
 			const errorMessage = tagError instanceof Error ? tagError.message : String(tagError);
 			// Item was added, but tags failed. Return this info to the caller.
 			return { id: newItemId, itemAddedButTagsFailed: true, tagErrorMessage: errorMessage };
@@ -362,7 +333,7 @@ export async function updateItemWithRelations(
 		throw new Error(`Database error updating item: ${updateItemError.message}`);
 	}
 
-	// --- 3. Handle Tag Updates ---
+	// --- 3. Handle Tag Updates using Tag Service ---
 	const newTagNames =
 		tagsString
 			?.split(',')
@@ -370,81 +341,10 @@ export async function updateItemWithRelations(
 			.filter((tag) => tag.length > 0) ?? [];
 
 	try {
-		// Get current tags associated with the item
-		const { data: currentItemTagsData, error: currentTagsError } = await supabase
-			.from('item_tags')
-			.select('tag_id, tags(id, name)') // Select tag name via relation
-			.eq('item_id', itemId);
-
-		if (currentTagsError) throw currentTagsError;
-
-		// Process currentItemTagsData to align with the expected structure for tags
-		const currentTagsProcessed: { tag_id: string; tags: { id: string; name: string } | null }[] = (
-			currentItemTagsData || []
-		).map((itemTag) => ({
-			tag_id: itemTag.tag_id,
-			tags: Array.isArray(itemTag.tags) ? itemTag.tags[0] || null : itemTag.tags || null
-		}));
-
-		const currentTagMap = new Map(
-			currentTagsProcessed
-				.map((ct) => (ct.tags ? [ct.tags.name, ct.tags.id] : null))
-				.filter(Boolean) as [string, string][]
-		);
-		const currentTagNames = currentTagsProcessed
-			.map((ct) => ct.tags?.name)
-			.filter(Boolean) as string[];
-
-		// Tags to Add: new tags not in currentTagNames
-		const tagsToAddNames = newTagNames.filter((name) => !currentTagMap.has(name));
-		if (tagsToAddNames.length > 0) {
-			// Find if these tags already exist for the user
-			const { data: existingUserTags, error: findTagsErr } = await supabase
-				.from('tags')
-				.select('id, name')
-				.eq('user_id', userId)
-				.in('name', tagsToAddNames);
-			if (findTagsErr) throw findTagsErr;
-
-			const existingUserTagMap = new Map(existingUserTags.map((t) => [t.name, t.id]));
-			let tagsToLinkIds = existingUserTags.map((t) => t.id);
-
-			// Identify tags that need to be created
-			const tagsToCreateNames = tagsToAddNames.filter((name) => !existingUserTagMap.has(name));
-			if (tagsToCreateNames.length > 0) {
-				const { data: createdTags, error: createTagsErr } = await supabase
-					.from('tags')
-					.insert(tagsToCreateNames.map((name) => ({ name, user_id: userId })))
-					.select('id');
-				if (createTagsErr) throw createTagsErr;
-				tagsToLinkIds = tagsToLinkIds.concat(createdTags.map((t) => t.id));
-			}
-
-			// Link new/existing tags to the item
-			if (tagsToLinkIds.length > 0) {
-				const { error: linkTagsErr } = await supabase
-					.from('item_tags')
-					.insert(tagsToLinkIds.map((tagId) => ({ item_id: itemId, tag_id: tagId })));
-				if (linkTagsErr) throw linkTagsErr;
-			}
-		}
-
-		// Tags to Remove: current tags not in newTagNames
-		const tagsToRemoveNames = currentTagNames.filter((name) => !newTagNames.includes(name));
-		const tagsToRemoveIds = tagsToRemoveNames
-			.map((name) => currentTagMap.get(name))
-			.filter(Boolean) as string[];
-
-		if (tagsToRemoveIds.length > 0) {
-			const { error: unlinkTagsErr } = await supabase
-				.from('item_tags')
-				.delete()
-				.eq('item_id', itemId)
-				.in('tag_id', tagsToRemoveIds);
-			if (unlinkTagsErr) throw unlinkTagsErr;
-		}
+		await syncItemTags(supabase, itemId, userId, newTagNames);
 	} catch (tagError: unknown) {
-		console.error('Error updating tags for item:', tagError);
+		console.error('Error updating tags for item via service:', tagError);
+		// Item was updated, but tags failed. Return this info to the caller.
 		const errorMessage = tagError instanceof Error ? tagError.message : String(tagError);
 		return { itemUpdatedButTagsFailed: true, tagErrorMessage: errorMessage };
 	}
