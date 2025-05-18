@@ -45,11 +45,10 @@ export async function listItemsForUser(
 	// Map the raw data to the expected ItemEntry structure
 	const mappedData: ItemEntry[] = (data || []).map((item) => ({
 		...item,
-		// Supabase returns joined one-to-one relations as arrays by default,
-		// so we take the first element if it exists.
-		category: Array.isArray(item.category) && item.category.length > 0 ? item.category[0] : null,
-		entity: Array.isArray(item.entity) && item.entity.length > 0 ? item.entity[0] : null,
-		tags: item.tags || [] // Ensure tags is always an array
+		// Handle cases where Supabase returns a single object or an array for joined relations
+		category: Array.isArray(item.category) ? (item.category[0] || null) : (item.category || null),
+		entity: Array.isArray(item.entity) ? (item.entity[0] || null) : (item.entity || null),
+		tags: item.tags || [] // Ensure tags is always an array (many-to-many)
 	}));
 
 	return mappedData;
