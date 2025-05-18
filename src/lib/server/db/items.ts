@@ -1,8 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { ItemEntry as ItemWithRelations } from '$lib/types'; // Assuming ItemEntry is the correct type for the list
+import type { ItemEntry, ItemDetail, Tag } from '$lib/types'; // ItemDetail includes notes and more comprehensive relations
 
 // Define a more specific return type if possible, or adjust ItemWithRelations
-// to accurately reflect what's being selected. For now, using ItemWithRelations.
+// to accurately reflect what's being selected. For now, using ItemEntry for lists and ItemDetail for single item views.
 
 /**
  * Fetches all items for a given user, including related category, tags, and entity.
@@ -15,7 +15,7 @@ import type { ItemEntry as ItemWithRelations } from '$lib/types'; // Assuming It
 export async function listItemsForUser(
 	supabase: SupabaseClient,
 	userId: string
-): Promise<ItemWithRelations[]> {
+): Promise<ItemEntry[]> {
 	const { data, error } = await supabase
 		.from('items')
 		.select(
@@ -43,7 +43,7 @@ export async function listItemsForUser(
 	}
 
 	// Map the raw data to the expected ItemEntry structure
-	const mappedData: ItemWithRelations[] = (data || []).map((item) => ({
+	const mappedData: ItemEntry[] = (data || []).map((item) => ({
 		...item,
 		// Supabase returns joined one-to-one relations as arrays by default,
 		// so we take the first element if it exists.
@@ -216,10 +216,239 @@ export async function deleteItemById(
 	if (count === 0) {
 		// This could happen if the item doesn't exist or doesn't belong to the user.
 		// Depending on desired behavior, this could be a specific error or just logged.
-		console.warn(`Attempted to delete item ${itemId} for user ${userId}, but no matching item was found.`);
+		console.warn(
+			`Attempted to delete item ${itemId} for user ${userId}, but no matching item was found.`
+		);
 		// Optionally throw a more specific error, e.g., new Error('Item not found or not owned by user.');
 		// For now, if no error from Supabase and count is 0, we consider it a non-failure from a DB perspective,
 		// but the action handler might still want to know no rows were affected.
 	}
 	// If ON DELETE CASCADE is set for item_tags.item_id, related tags will be handled by the DB.
-} 
+}
+
+/**
+ * Fetches a single item by its ID for a given user, including related category, tags, entity, and notes.
+ * Notes are ordered by creation date (descending).
+ *
+ * @param supabase - The Supabase client instance.
+ * @param itemId - The ID of the item to be fetched.
+ * @param userId - The ID of the user whose item is to be fetched.
+ * @returns A promise that resolves to the item details or null if not found/not owned.
+ * @throws Throws an error if the fetch operation fails.
+ */
+export async function getItemByIdForUser(
+	supabase: SupabaseClient,
+	itemId: string,
+	userId: string
+): Promise<ItemDetail | null> {
+	const { data, error } = await supabase
+		.from('items')
+		.select(
+			`
+      id,
+      name,
+      description,
+      expiration,
+      created_at,
+      updated_at,
+      category: categories ( id, name ),
+      tags ( id, name ),
+      entity: entities ( id, name ),
+      entity_name_manual,
+      item_notes ( id, note_text, created_at, updated_at, user_id ) 
+    `
+		)
+		.eq('user_id', userId)
+		.eq('id', itemId)
+		.maybeSingle();
+
+	if (error) {
+		console.error(`Error fetching item ${itemId} for user ${userId}:`, error);
+		throw error;
+	}
+
+	if (!data) {
+		return null;
+	}
+
+	// Map the raw data to the expected ItemDetail structure
+	const itemDetail: ItemDetail = {
+		...data,
+		category: Array.isArray(data.category) ? data.category[0] || null : data.category || null,
+		entity: Array.isArray(data.entity) ? data.entity[0] || null : data.entity || null,
+		tags: (data.tags as Tag[]) || [], // Ensure tags is always an array
+		item_notes: (data.item_notes || []).sort(
+			(a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+		)
+	};
+
+	return itemDetail;
+}
+
+// Define the structure for the data needed to update an item
+export interface UpdateItemPayload {
+	itemId: string;
+	userId: string;
+	name: string;
+	description: string | null;
+	categoryId: string | null;
+	expiration: string;
+	tagsString: string | null;
+	entityNameManual: string | null;
+	// entityId could be added if direct selection is allowed
+}
+
+/**
+ * Updates an existing item, handles entity lookup/creation, and manages tags.
+ *
+ * @param supabase The Supabase client instance.
+ * @param itemData The data for updating the item.
+ * @returns An object indicating success or if tags failed.
+ * @throws Throws an error if item update or critical tag handling fails.
+ */
+export async function updateItemWithRelations(
+	supabase: SupabaseClient,
+	itemData: UpdateItemPayload
+): Promise<{ itemUpdatedButTagsFailed?: boolean; tagErrorMessage?: string }> {
+	const {
+		itemId,
+		userId,
+		name,
+		description,
+		categoryId,
+		expiration,
+		tagsString,
+		entityNameManual
+	} = itemData;
+
+	// --- 1. Determine Entity ID and Manual Name ---
+	let entityIdToSave: string | null = null;
+	let entityNameManualToSave: string | null = entityNameManual?.trim() || null;
+
+	if (entityNameManualToSave) {
+		const { data: matchingEntity, error: entityCheckError } = await supabase
+			.from('entities')
+			.select('id')
+			.eq('user_id', userId)
+			.eq('name', entityNameManualToSave)
+			.maybeSingle();
+
+		if (entityCheckError) {
+			console.error('Error checking for existing entity during update:', entityCheckError);
+			// Depending on strictness, this could throw. For now, log and proceed.
+		}
+
+		if (matchingEntity) {
+			entityIdToSave = matchingEntity.id;
+			entityNameManualToSave = null;
+		}
+	}
+
+	// --- 2. Update Core Item Details ---
+	const { error: updateItemError } = await supabase
+		.from('items')
+		.update({
+			name: name,
+			description: description,
+			category_id: categoryId || null,
+			expiration: expiration,
+			entity_id: entityIdToSave,
+			entity_name_manual: entityNameManualToSave,
+			updated_at: new Date().toISOString()
+		})
+		.match({ id: itemId, user_id: userId });
+
+	if (updateItemError) {
+		console.error('Error updating item details in database:', updateItemError);
+		throw new Error(`Database error updating item: ${updateItemError.message}`);
+	}
+
+	// --- 3. Handle Tag Updates ---
+	const newTagNames =
+		tagsString
+			?.split(',')
+			.map((tag) => tag.trim())
+			.filter((tag) => tag.length > 0) ?? [];
+
+	try {
+		// Get current tags associated with the item
+		const { data: currentItemTagsData, error: currentTagsError } = await supabase
+			.from('item_tags')
+			.select('tag_id, tags(id, name)') // Select tag name via relation
+			.eq('item_id', itemId);
+
+		if (currentTagsError) throw currentTagsError;
+
+		// Process currentItemTagsData to align with the expected structure for tags
+		const currentTagsProcessed: { tag_id: string; tags: { id: string; name: string } | null }[] = (
+			currentItemTagsData || []
+		).map((itemTag) => ({
+			tag_id: itemTag.tag_id,
+			tags: Array.isArray(itemTag.tags) ? itemTag.tags[0] || null : itemTag.tags || null
+		}));
+
+		const currentTagMap = new Map(
+			currentTagsProcessed
+				.map((ct) => (ct.tags ? [ct.tags.name, ct.tags.id] : null))
+				.filter(Boolean) as [string, string][]
+		);
+		const currentTagNames = currentTagsProcessed
+			.map((ct) => ct.tags?.name)
+			.filter(Boolean) as string[];
+
+		// Tags to Add: new tags not in currentTagNames
+		const tagsToAddNames = newTagNames.filter((name) => !currentTagMap.has(name));
+		if (tagsToAddNames.length > 0) {
+			// Find if these tags already exist for the user
+			const { data: existingUserTags, error: findTagsErr } = await supabase
+				.from('tags')
+				.select('id, name')
+				.eq('user_id', userId)
+				.in('name', tagsToAddNames);
+			if (findTagsErr) throw findTagsErr;
+
+			const existingUserTagMap = new Map(existingUserTags.map((t) => [t.name, t.id]));
+			let tagsToLinkIds = existingUserTags.map((t) => t.id);
+
+			// Identify tags that need to be created
+			const tagsToCreateNames = tagsToAddNames.filter((name) => !existingUserTagMap.has(name));
+			if (tagsToCreateNames.length > 0) {
+				const { data: createdTags, error: createTagsErr } = await supabase
+					.from('tags')
+					.insert(tagsToCreateNames.map((name) => ({ name, user_id: userId })))
+					.select('id');
+				if (createTagsErr) throw createTagsErr;
+				tagsToLinkIds = tagsToLinkIds.concat(createdTags.map((t) => t.id));
+			}
+
+			// Link new/existing tags to the item
+			if (tagsToLinkIds.length > 0) {
+				const { error: linkTagsErr } = await supabase
+					.from('item_tags')
+					.insert(tagsToLinkIds.map((tagId) => ({ item_id: itemId, tag_id: tagId })));
+				if (linkTagsErr) throw linkTagsErr;
+			}
+		}
+
+		// Tags to Remove: current tags not in newTagNames
+		const tagsToRemoveNames = currentTagNames.filter((name) => !newTagNames.includes(name));
+		const tagsToRemoveIds = tagsToRemoveNames
+			.map((name) => currentTagMap.get(name))
+			.filter(Boolean) as string[];
+
+		if (tagsToRemoveIds.length > 0) {
+			const { error: unlinkTagsErr } = await supabase
+				.from('item_tags')
+				.delete()
+				.eq('item_id', itemId)
+				.in('tag_id', tagsToRemoveIds);
+			if (unlinkTagsErr) throw unlinkTagsErr;
+		}
+	} catch (tagError: unknown) {
+		console.error('Error updating tags for item:', tagError);
+		const errorMessage = tagError instanceof Error ? tagError.message : String(tagError);
+		return { itemUpdatedButTagsFailed: true, tagErrorMessage: errorMessage };
+	}
+
+	return {}; // Success
+}
