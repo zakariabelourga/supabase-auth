@@ -47,20 +47,45 @@ export async function listItemsForUser(
 	const mappedData: ItemEntry[] = (data || []).map((item) => ({
 		...item,
 		// Handle cases where Supabase returns a single object or an array for joined relations
-		category: Array.isArray(item.category) ? (item.category[0] || null) : (item.category || null),
-		entity: Array.isArray(item.entity) ? (item.entity[0] || null) : (item.entity || null),
+		category: Array.isArray(item.category) ? item.category[0] || null : item.category || null,
+		entity: Array.isArray(item.entity) ? item.entity[0] || null : item.entity || null,
 		tags: item.tags || [] // Ensure tags is always an array (many-to-many)
 	}));
 
 	return mappedData;
 }
 
-// We might also add functions here for fetching categories and entities if they
-// are commonly fetched together with items or by other parts of the app.
-// For example:
+// --- Helper function to resolve entity ---
+async function _resolveEntity(
+	supabase: SupabaseClient,
+	userId: string,
+	entityNameManual: string | null | undefined
+): Promise<{ entityIdToSave: string | null; entityNameManualToSave: string | null }> {
+	let entityIdToSave: string | null = null;
+	let entityNameManualToSave: string | null = entityNameManual?.trim() || null;
 
-// export async function getAllCategories(supabase: SupabaseClient): Promise<Category[]> { ... }
-// export async function getEntitiesForUser(supabase: SupabaseClient, userId: string): Promise<Entity[]> { ... }
+	if (entityNameManualToSave) {
+		// Server-side check: If a manual name was provided, see if it EXACTLY matches an existing entity for this user
+		const { data: matchingEntity, error: entityCheckError } = await supabase
+			.from('entities')
+			.select('id')
+			.eq('user_id', userId)
+			.eq('name', entityNameManualToSave) // Case-sensitive match
+			.maybeSingle();
+
+		if (entityCheckError) {
+			console.error('Error checking for existing entity:', entityCheckError);
+			// Depending on strictness, this could throw. For now, log and proceed.
+			// Consider how to handle this error more robustly if needed.
+		}
+
+		if (matchingEntity) {
+			entityIdToSave = matchingEntity.id;
+			entityNameManualToSave = null; // Clear manual name if a match is found
+		}
+	}
+	return { entityIdToSave, entityNameManualToSave };
+}
 
 // Define the structure for the data needed to create an item
 export interface CreateItemPayload {
@@ -71,7 +96,6 @@ export interface CreateItemPayload {
 	expiration: string; // Assuming string in 'YYYY-MM-DD' format
 	tagsString: string | null;
 	entityNameManual: string | null;
-	// We might add entityId here if we allow selecting an existing entity directly by ID in the future
 }
 
 /**
@@ -90,29 +114,11 @@ export async function createItem(
 		itemData;
 
 	// --- 1. Determine Entity ID and Manual Name ---
-	let entityIdToSave: string | null = null;
-	let entityNameManualToSave: string | null = entityNameManual?.trim() || null;
-
-	if (entityNameManualToSave) {
-		// Server-side check: If a manual name was provided, see if it EXACTLY matches an existing entity for this user
-		const { data: matchingEntity, error: entityCheckError } = await supabase
-			.from('entities')
-			.select('id')
-			.eq('user_id', userId)
-			.eq('name', entityNameManualToSave) // Case-sensitive match
-			.maybeSingle();
-
-		if (entityCheckError) {
-			console.error('Error checking for existing entity:', entityCheckError);
-			// For now, we'll let this proceed and save as manual, but this could be a hard error.
-			// throw new Error(`Error checking for existing entity: ${entityCheckError.message}`);
-		}
-
-		if (matchingEntity) {
-			entityIdToSave = matchingEntity.id;
-			entityNameManualToSave = null; // Clear manual name if a match is found
-		}
-	}
+	const { entityIdToSave, entityNameManualToSave } = await _resolveEntity(
+		supabase,
+		userId,
+		entityNameManual
+	);
 
 	// --- 2. Insert the Item ---
 	const { data: newItemData, error: insertError } = await supabase
@@ -185,15 +191,12 @@ export async function deleteItemById(
 
 	if (count === 0) {
 		// This could happen if the item doesn't exist or doesn't belong to the user.
-		// Depending on desired behavior, this could be a specific error or just logged.
 		console.warn(
 			`Attempted to delete item ${itemId} for user ${userId}, but no matching item was found.`
 		);
-		// Optionally throw a more specific error, e.g., new Error('Item not found or not owned by user.');
-		// For now, if no error from Supabase and count is 0, we consider it a non-failure from a DB perspective,
-		// but the action handler might still want to know no rows were affected.
+		throw new Error('Item not found or not owned by user.');
 	}
-	// If ON DELETE CASCADE is set for item_tags.item_id, related tags will be handled by the DB.
+	// ON DELETE CASCADE is set for item_tags.item_id, related tags will be handled by the DB.
 }
 
 /**
@@ -246,7 +249,7 @@ export async function getItemByIdForUser(
 		...data,
 		category: Array.isArray(data.category) ? data.category[0] || null : data.category || null,
 		entity: Array.isArray(data.entity) ? data.entity[0] || null : data.entity || null,
-		tags: (data.tags as Tag[]) || [], // Ensure tags is always an array
+		tags: (data.tags as Tag[]) || [],
 		item_notes: (data.item_notes || []).sort(
 			(a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
 		)
@@ -292,27 +295,11 @@ export async function updateItemWithRelations(
 	} = itemData;
 
 	// --- 1. Determine Entity ID and Manual Name ---
-	let entityIdToSave: string | null = null;
-	let entityNameManualToSave: string | null = entityNameManual?.trim() || null;
-
-	if (entityNameManualToSave) {
-		const { data: matchingEntity, error: entityCheckError } = await supabase
-			.from('entities')
-			.select('id')
-			.eq('user_id', userId)
-			.eq('name', entityNameManualToSave)
-			.maybeSingle();
-
-		if (entityCheckError) {
-			console.error('Error checking for existing entity during update:', entityCheckError);
-			// Depending on strictness, this could throw. For now, log and proceed.
-		}
-
-		if (matchingEntity) {
-			entityIdToSave = matchingEntity.id;
-			entityNameManualToSave = null;
-		}
-	}
+	const { entityIdToSave, entityNameManualToSave } = await _resolveEntity(
+		supabase,
+		userId,
+		entityNameManual
+	);
 
 	// --- 2. Update Core Item Details ---
 	const { error: updateItemError } = await supabase
