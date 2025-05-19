@@ -2,20 +2,17 @@
 	import { enhance } from '$app/forms';
 	import { type SubmitFunction, type ActionResult } from '@sveltejs/kit';
 	import ItemForm from '$lib/components/ItemForm.svelte'; // Import the form component
+	import ItemDetailsCard from '$lib/components/ItemDetailsCard.svelte'; // Import the new component
 	import Trash2 from '@lucide/svelte/icons/trash-2'; // Icon for delete
 	import PencilLine from '@lucide/svelte/icons/pencil-line'; // Icon for edit
 	import Save from '@lucide/svelte/icons/save'; // Icon for save
 	import X from '@lucide/svelte/icons/x'; // Icon for cancel
 	import Loader from '@lucide/svelte/icons/loader';
-	import Calendar from '@lucide/svelte/icons/calendar'; // Icon for expiration date
-	import Tag from '@lucide/svelte/icons/tag'; // Icon for tags
-	import Store from '@lucide/svelte/icons/store'; // Icon for entity/provider
 	import CirclePlus from '@lucide/svelte/icons/circle-plus';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Textarea } from '$lib/components/ui/textarea/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
-	import { Badge } from '$lib/components/ui/badge/index.js';
 	import type { PageData } from './+page.server'; // Import PageData
 
 	// Define a type for the custom content within our form actions
@@ -153,34 +150,6 @@
 			showItemDialog = false; // Hide form after successful update
 		}
 	});
-
-	// Format date for display
-	function formatDate(dateString: string): string {
-		return new Date(dateString).toLocaleDateString();
-	}
-
-	// Get entity display name
-	function getEntityDisplayName(): string {
-		return item.entity?.name ?? item.entity_name_manual ?? 'None';
-	}
-
-	// Scroll to the bottom of notes list when a new note is added
-	let notesListElement: HTMLElement | null = $state(null);
-	$effect(() => {
-		// This effect runs whenever item.item_notes changes
-		if (notesListElement && item.item_notes.length > 0) {
-			// Check if the scroll position is near the bottom before auto-scrolling
-			// (prevents scrolling if user manually scrolled up)
-			const threshold = 50; // Pixels from bottom
-			const isScrolledToBottom =
-				notesListElement.scrollHeight - notesListElement.scrollTop - notesListElement.clientHeight <
-				threshold;
-
-			// Simple approach: always scroll down when notes change
-			// A more sophisticated approach might only scroll if the user was already near the bottom
-			notesListElement.scrollTo({ top: notesListElement.scrollHeight, behavior: 'smooth' });
-		}
-	});
 </script>
 
 <svelte:head>
@@ -211,86 +180,7 @@
 	{/if}
 
 	<!-- Item Details Card -->
-	<Card.Root class="mb-6">
-		<Card.Header>
-			<div class="flex flex-row items-center justify-between space-y-0 pb-2">
-				<div>
-					<Card.Title class="text-2xl font-bold mb-1">{item.name}</Card.Title>
-					<Card.Description>{item.description || 'No description provided'}</Card.Description>
-				</div>
-				<Button variant="outline" onclick={() => showItemDialog = true} class="flex items-center gap-2">
-					<PencilLine class="size-4" /> Edit Item
-				</Button>
-			</div>
-		</Card.Header>
-		<Card.Content>
-			<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-				<!-- Left column -->
-				<div class="space-y-4">
-					<!-- Expiration Date -->
-					<div class="flex items-start gap-4">
-						<Calendar class="mt-1 size-5 text-muted-foreground" />
-						<div>
-							<h3 class="font-semibold">Expiration Date</h3>
-							<p>{formatDate(item.expiration)}</p>
-						</div>
-					</div>
-
-					<!-- Category -->
-					<div class="flex items-start gap-4">
-						<Tag class="mt-1 size-5 text-muted-foreground" />
-						<div>
-							<h3 class="font-semibold">Category</h3>
-							<p>{item.category?.name ?? 'Uncategorized'}</p>
-						</div>
-					</div>
-
-					<!-- Provider/Entity -->
-					<div class="flex items-start gap-4">
-						<Store class="mt-1 size-5 text-muted-foreground" />
-						<div>
-							<h3 class="font-semibold">Provider/Entity</h3>
-							<p>{getEntityDisplayName()}</p>
-						</div>
-					</div>
-				</div>
-
-				<!-- Right column -->
-				<div class="space-y-4">
-					<!-- Tags -->
-					<div class="flex items-start gap-4">
-						<Tag class="mt-1 size-5 text-muted-foreground" />
-						<div>
-							<h3 class="font-semibold">Tags</h3>
-							<div class="mt-1 flex flex-wrap gap-2">
-								{#if item.tags && item.tags.length > 0}
-									{#each item.tags as tag}
-										<Badge variant="default">{tag.name}</Badge>
-									{/each}
-								{:else}
-									<p>No tags</p>
-								{/if}
-							</div>
-						</div>
-					</div>
-
-					<!-- Created/Updated dates -->
-					<div class="flex items-start gap-4">
-						<Calendar class="mt-1 size-5 text-muted-foreground" />
-						<div>
-							<h3 class="font-semibold">Created</h3>
-							<p>{formatDate(item.created_at)}</p>
-							{#if item.created_at !== item.updated_at}
-								<p class="text-sm text-muted-foreground">
-									Last updated: {formatDate(item.updated_at)}
-								</p>
-							{/if}
-						</div>
-					</div>
-				</div>
-			</div>
-		</Card.Content>
-	</Card.Root>
+	<ItemDetailsCard item={item} onEdit={() => showItemDialog = true} />
 
 	<!-- Item Notes Section -->
 	<Card.Root class="border-none shadow-none">
@@ -344,7 +234,7 @@
 			</form>
 
 			<!-- Notes List -->
-			<div class="space-y-4 overflow-y-auto pr-2" bind:this={notesListElement}>
+			<div class="space-y-4 overflow-y-auto pr-2">
 				{#if item.item_notes.length > 0}
 					{#each item.item_notes as note (note.id)}
 						<Card.Root>
