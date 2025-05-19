@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { type SubmitFunction } from '@sveltejs/kit';
+	import { type SubmitFunction, type ActionResult } from '@sveltejs/kit';
 	import ItemForm from '$lib/components/ItemForm.svelte'; // Import the form component
 	import Trash2 from '@lucide/svelte/icons/trash-2'; // Icon for delete
 	import PencilLine from '@lucide/svelte/icons/pencil-line'; // Icon for edit
@@ -16,9 +16,62 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
+	import type { PageData } from './+page.server'; // Import PageData
 
-	let { data, form } = $props(); // Receive loaded data and form action results
+	// Define a type for the custom content within our form actions
+	interface ItemFormValues {
+		itemId?: string;
+		name?: string | null;
+		description?: string | null;
+		categoryId?: string | null;
+		expiration?: string | null;
+		tagsString?: string | null;
+		entityNameManual?: string | null;
+	}
+
+	interface FormActionData {
+		message?: string; 
+		values?: ItemFormValues; 
+		isUpdate?: boolean; 
+
+		itemUpdateSuccess?: boolean;
+		itemUpdateError?: string;
+		itemUpdatedButTagsFailed?: boolean;
+
+		noteSuccess?: string;
+		noteError?: string;
+		noteText?: string; 
+
+		noteUpdateSuccess?: string;
+		noteUpdateError?: string;
+		errorNoteId?: string; 
+
+		noteDeleteSuccess?: string;
+		noteDeleteError?: string;
+	}
+
+	let { data, form }: { data: PageData; form: ActionResult<Partial<FormActionData>, Partial<FormActionData>> | null } = $props();
 	let { item, categories, entities } = $derived(data);
+
+	// Helper to get data from form result, whether success or failure
+	const getFormActionData = (actionResult: ActionResult<Partial<FormActionData>, Partial<FormActionData>> | null): Partial<FormActionData> | null => {
+		if (!actionResult) return null;
+		if (actionResult.type === 'success') {
+			return actionResult.data ?? {}; 
+		}
+		if (actionResult.type === 'failure') {
+			return actionResult.data ?? {};
+		}
+		if (actionResult.type === 'error') {
+			// ActionResult of type 'error' has an 'error' property, not 'data'
+			// We typically don't pass custom data with this type, so return empty or handle specific error shape if needed
+			console.error('ActionResult type error:', actionResult.error);
+			return {}; 
+		}
+		return {}; // Should ideally not be reached if all SvelteKit action result types are handled
+	};
+
+	let currentFormActionData = $derived(getFormActionData(form));
 
 	// State for the notes form
 	let isSubmittingNote = $state(false);
@@ -34,11 +87,12 @@
 	const handleNoteSubmit: SubmitFunction = () => {
 		isSubmittingNote = true;
 		editingNoteId = null; // Ensure not in edit mode when adding
-		return async ({ update }) => {
-			await update(); // Important: update form state
+		return async ({ update, result }) => {
+			await update({ reset: false }); // update form state, prevent SvelteKit default reset
 			isSubmittingNote = false;
 			// Reset form if successful (check form prop)
-			if (form && !(form as any).noteError) {
+			const latestFormActionData = getFormActionData(result); // Use result here
+			if (latestFormActionData && !latestFormActionData.noteError && latestFormActionData.noteSuccess) {
 				newNoteText = ''; // Clear textarea state
 				noteFormRef?.reset(); // Reset native form
 			}
@@ -60,11 +114,12 @@
 	// Update Note
 	const handleNoteUpdateSubmit: SubmitFunction = () => {
 		isSubmittingNoteUpdate = true;
-		return async ({ update }) => {
-			await update();
+		return async ({ update, result }) => {
+			await update({ reset: false }); // update form state, prevent SvelteKit default reset
 			isSubmittingNoteUpdate = false;
 			// If successful, clear editing state
-			if (form && !(form as any).noteUpdateError && (form as any).noteUpdateSuccess) {
+			const latestFormActionData = getFormActionData(result); // Use result here
+			if (latestFormActionData && !latestFormActionData.noteUpdateError && latestFormActionData.noteUpdateSuccess) {
 				cancelEditingNote();
 			}
 		};
@@ -93,17 +148,8 @@
 	}
 
 	$effect(() => {
-		// Close item form on successful item update (not note add)
-		if (
-			(form?.status === 200 || form?.status === 201) &&
-			!(form as any)?.values &&
-			!(form as any)?.noteSuccess &&
-			!(form as any)?.noteError &&
-			!(form as any)?.noteUpdateSuccess &&
-			!(form as any)?.noteUpdateError &&
-			!(form as any)?.noteDeleteSuccess &&
-			!(form as any)?.noteDeleteError
-		) {
+		// Close item form on successful item update
+		if (currentFormActionData?.itemUpdateSuccess) {
 			showItemDialog = false; // Hide form after successful update
 		}
 	});
@@ -146,7 +192,7 @@
 	{item} 
 	{categories} 
 	{entities} 
-	formResult={form as any} 
+	formResult={form} 
 	bind:open={showItemDialog}
 	onOpenChange={handleItemFormOpenChange}
 />
@@ -156,9 +202,11 @@
 
 	<h1 class="mb-6 text-3xl font-bold">Item Details</h1>
 
-	{#if form?.message && !(form as any)?.noteError && !(form as any)?.noteSuccess && !(form as any)?.noteUpdateError && !(form as any)?.noteUpdateSuccess && !(form as any)?.noteDeleteError && !(form as any)?.noteDeleteSuccess}
-		<div class="alert {form.status && form.status < 400 ? 'alert-success' : 'alert-error'} mb-4">
-			<span>{form.message}</span>
+	{#if currentFormActionData?.message && (currentFormActionData?.itemUpdateSuccess || currentFormActionData?.itemUpdateError)}
+		<div 
+			class="alert {currentFormActionData?.itemUpdateSuccess ? 'alert-success' : currentFormActionData?.itemUpdateError ? 'alert-error' : ''} mb-4"
+		>
+			<span>{currentFormActionData.message || currentFormActionData.itemUpdateError}</span>
 		</div>
 	{/if}
 
@@ -263,15 +311,15 @@
 				bind:this={noteFormRef}
 				class="mb-6"
 			>
-				{#if (form as any)?.noteError && editingNoteId === null}
+				{#if currentFormActionData?.noteError && editingNoteId === null}
 					<!-- Only show add error if not editing -->
 					<div class="alert alert-error mb-2 p-2 text-sm">
-						<span>{(form as any).noteError}</span>
+						<span>{currentFormActionData.noteError}</span>
 					</div>
 				{/if}
-				{#if (form as any)?.noteSuccess}
+				{#if currentFormActionData?.noteSuccess}
 					<div class="alert alert-success mb-2 p-2 text-sm">
-						<span>{(form as any).noteSuccess}</span>
+						<span>{currentFormActionData.noteSuccess}</span>
 					</div>
 				{/if}
 				<div class="form-control mb-4">
@@ -305,9 +353,9 @@
 									<!-- Edit Note Form -->
 									<form method="POST" action="?/updateNote" use:enhance={handleNoteUpdateSubmit}>
 										<Input type="hidden" name="noteId" value={note.id} />
-										{#if (form as any)?.noteUpdateError && (form as any)?.errorNoteId === note.id}
+										{#if currentFormActionData?.noteUpdateError && currentFormActionData?.errorNoteId === note.id}
 											<div class="alert alert-error mb-2 p-2 text-sm">
-												<span>{(form as any).noteUpdateError}</span>
+												<span>{currentFormActionData.noteUpdateError}</span>
 											</div>
 										{/if}
 										<Textarea

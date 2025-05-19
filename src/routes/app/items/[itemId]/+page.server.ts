@@ -7,7 +7,14 @@ import { addNoteToItem, deleteNoteById, updateNoteById } from '$lib/server/db/no
 import { getEntitiesForUser } from '$lib/server/db/entities';
 import { getAllCategories } from '$lib/server/db/categories';
 
-export const load: PageServerLoad = async ({ params, locals: { supabase, session } }) => {
+// Define PageData type based on load function
+export type PageData = {
+	item: ItemDetail;
+	categories: Category[];
+	entities: Entity[];
+};
+
+export const load: PageServerLoad<PageData> = async ({ params, locals: { supabase, session } }) => {
 	if (!session) {
 		redirect(303, '/auth');
 	}
@@ -113,7 +120,7 @@ export const actions: Actions = {
         // --- Basic Validation ---
         if (!name || !expiration) {
             return fail(400, {
-                message: 'Missing required fields: Name and Expiration Date are required.',
+                itemUpdateError: 'Missing required fields: Name and Expiration Date are required.',
                 values: { itemId, name, description, categoryId, expiration, tagsString, entityNameManual: entityNameManualInput }, // Keep itemId in values for form context
                 isUpdate: true
             });
@@ -134,7 +141,7 @@ export const actions: Actions = {
             const result = await updateItemWithRelations(supabase, updatePayload);
             if (result.itemUpdatedButTagsFailed) {
                 return fail(500, {
-                    message: `Item updated, but failed to process tags: ${result.tagErrorMessage}`,
+                    itemUpdateError: `Item updated, but failed to process tags: ${result.tagErrorMessage}`,
                     values: { itemId, name, description, categoryId, expiration, tagsString, entityNameManual: entityNameManualInput },
                     isUpdate: true,
                     itemUpdatedButTagsFailed: true
@@ -143,7 +150,7 @@ export const actions: Actions = {
         } catch (error: any) {
             console.error('Error updating item:', error);
             return fail(500, {
-                message: `Database error updating item: ${error.message}`,
+                itemUpdateError: `Database error updating item: ${error.message}`,
                 values: { itemId, name, description, categoryId, expiration, tagsString, entityNameManual: entityNameManualInput },
                 isUpdate: true
             });
@@ -151,7 +158,7 @@ export const actions: Actions = {
 
         // --- Success ---
         return { 
-            status: 200, // OK
+            itemUpdateSuccess: true,
             message: 'Item updated successfully.'
         };
     },
