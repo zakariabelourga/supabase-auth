@@ -145,15 +145,6 @@
 			bind:this={formRef}
 			class="py-4"
 		>
-			<!-- Action determined by parent page context -->
-			<!-- Display Message from Parent ($form / formResult prop) -->
-			{#if formResult?.message && ((formValues?.itemId === item?.id && isEditMode) || (!isEditMode && !formValues?.isUpdate) || formValues?.isUpdate === isEditMode)}
-				<div
-					class={`mb-4 rounded-md p-4 ${(formResult.status && formResult.status < 400) || formResult.itemUpdatedButTagsFailed ? 'border border-green-200 bg-green-50 text-green-700' : 'border border-red-200 bg-red-50 text-red-700'}`}
-				>
-					<span>{formResult.message}</span>
-				</div>
-			{/if}
 
 			<!-- Hidden input for ID in edit mode -->
 			{#if isEditMode}

@@ -31,7 +31,7 @@
         </nav>
     </header>
     <main class="flex-grow p-4">
-        <Toaster position="top-right" />
+        <Toaster position="top-center" />
         {@render children()}
     </main>
 </div>
