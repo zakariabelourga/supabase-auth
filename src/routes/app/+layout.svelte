@@ -1,5 +1,6 @@
 <script lang="ts">
     import { goto } from '$app/navigation';
+    import { Toaster } from "$lib/components/ui/sonner/index.js";
 
     let { data, children } = $props();
     let { supabase, session } = $derived(data);
@@ -30,6 +31,7 @@
         </nav>
     </header>
     <main class="flex-grow p-4">
+        <Toaster position="top-right" />
         {@render children()}
     </main>
 </div>
