@@ -1,37 +1,109 @@
 <script lang="ts">
-    import { goto } from '$app/navigation';
-    import { Toaster } from "$lib/components/ui/sonner/index.js";
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state'; // Import page store
+	import { Toaster } from '$lib/components/ui/sonner/index.js';
 
-    let { data, children } = $props();
-    let { supabase, session } = $derived(data);
+	import AppSidebar from '$lib/components/sidebar/app-sidebar.svelte';
+	import * as Breadcrumb from '$lib/components/ui/breadcrumb/index.js';
+	import { Separator } from '$lib/components/ui/separator/index.js';
+	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 
-    const handleLogout = async () => {
-        if (!supabase) return;
-        const { error } = await supabase.auth.signOut();
-        if (error) {
-            console.error('Error logging out:', error.message);
-            // Optionally show an error message to the user
-        } else {
-            // Invalidate layout and redirect to home or auth page
-            // invalidate('supabase:auth'); // Invalidation happens automatically via listener in root layout
-            goto('/auth', { invalidateAll: true }); // Redirect after sign out
-        }
-    };
+	// Icons for pages navigation
+	import Frame from "@lucide/svelte/icons/frame";
+	import ChartPie from "@lucide/svelte/icons/chart-pie";
+	import Map from "@lucide/svelte/icons/map";
+
+	let { data, children } = $props();
+	let { supabase, session, user } = $derived(data);
+
+	const handleLogout = async () => {
+		if (!supabase) return;
+		const { error } = await supabase.auth.signOut();
+		if (error) {
+			console.error('Error logging out:', error.message);
+			// Optionally show an error message to the user
+		} else {
+			// Invalidate layout and redirect to home or auth page
+			// invalidate('supabase:auth'); // Invalidation happens automatically via listener in root layout
+			goto('/auth', { invalidateAll: true }); // Redirect after sign out
+		}
+	};
+
+	const pagesNavigation = [
+		{
+			name: "Home",
+			url: "/app",
+			icon: Frame,
+		},
+		{
+			name: "Items",
+			url: "/app/items",
+			icon: ChartPie,
+		},
+		{
+			name: "Entities",
+			url: "/app/entities",
+			icon: Map,
+		},
+	];
+
+	let breadcrumbs = $derived((() => {
+		const basePath = '/app';
+		const currentPath = page.url.pathname;
+		const pathSegments = currentPath.startsWith(basePath + '/') 
+			? currentPath.substring(basePath.length + 1).split('/').filter(p => p)
+			: [];
+
+		if (currentPath === basePath && pathSegments.length === 0) {
+			const homePage = pagesNavigation.find(p => p.url === basePath);
+			return homePage ? [{ label: homePage.name, href: homePage.url }] : [];
+		}
+
+		// Check if the current page is an item detail page and data is loaded
+		const isItemDetailPage = pathSegments.length === 2 && pathSegments[0] === 'items' && page.data.item;
+
+		return pathSegments.map((segment, index, arr) => {
+			const path = `${basePath}/${arr.slice(0, index + 1).join('/')}`;
+			let label = segment.charAt(0).toUpperCase() + segment.slice(1);
+
+			// If it's the last segment of an item detail page, use the item's name
+			if (isItemDetailPage && index === arr.length - 1 && page.data.item.name) {
+				label = page.data.item.name;
+			}
+
+			return { label, href: path };
+		});
+	})());
 </script>
 
-<div class="min-h-screen flex flex-col">
-    <header class="bg-gray-100 py-4 px-4 border-b border-gray-200">
-        <nav class="flex gap-4 items-center">
-            <a href="/" class="text-blue-600 hover:text-blue-800">Home</a>
-            {#if session}
-                <span class="text-gray-600">Logged in as: {session.user.email}</span>
-                <a href="/app/account" class="text-blue-600 hover:text-blue-800">Account</a> <!-- Link to an example account page -->
-                <button onclick={handleLogout} class="text-blue-600 hover:text-blue-800">Logout</button>
-            {/if}
-        </nav>
-    </header>
-    <main class="flex-grow p-4">
-        <Toaster position="top-center" />
-        {@render children()}
-    </main>
-</div>
+<Sidebar.Provider>
+	<AppSidebar collapsible="icon" {user} {handleLogout} pages={pagesNavigation} />
+	<Sidebar.Inset>
+		<header
+			class="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12"
+		>
+			<div class="flex items-center gap-2 px-4">
+				<Sidebar.Trigger class="-ml-1" />
+				<Separator orientation="vertical" class="mr-2 h-4" />
+				<Breadcrumb.Root>
+					<Breadcrumb.List>
+						{#each breadcrumbs as crumb, i (crumb.href)}
+							<Breadcrumb.Item class={i < breadcrumbs.length -1 ? 'hidden md:flex' : ''}>
+								{#if i < breadcrumbs.length - 1}
+									<Breadcrumb.Link href={crumb.href}>{crumb.label}</Breadcrumb.Link>
+									<Breadcrumb.Separator class="hidden md:flex" />
+								{:else}
+									<Breadcrumb.Page>{crumb.label}</Breadcrumb.Page>
+								{/if}
+							</Breadcrumb.Item>
+						{/each}
+					</Breadcrumb.List>
+				</Breadcrumb.Root>
+			</div>
+		</header>
+		<main class="flex flex-1 flex-col gap-4 p-4 pt-0">
+			<Toaster position="top-center" />
+			{@render children()}
+		</main>
+	</Sidebar.Inset>
+</Sidebar.Provider>

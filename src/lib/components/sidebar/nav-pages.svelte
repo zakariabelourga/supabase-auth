@@ -3,9 +3,9 @@
 	import { page } from "$app/stores";
 
 	let {
-		projects,
+		pages, // Renamed from projects
 	}: {
-		projects: {
+		pages: { // Renamed from projects
 			name: string;
 			url: string;
 			// This should be `Component` and not any after @lucide/svelte updates types
@@ -18,7 +18,7 @@
 <Sidebar.Group>
 	<Sidebar.GroupLabel>Pages</Sidebar.GroupLabel>
 	<Sidebar.Menu>
-		{#each projects as item (item.name)}
+		{#each pages as item (item.name)} 
 			<Sidebar.MenuItem>
 				<Sidebar.MenuButton isActive={$page.url.pathname === item.url}>
 					{#snippet child({ props })}
@@ -31,4 +31,4 @@
 			</Sidebar.MenuItem>
 		{/each}
 	</Sidebar.Menu>
-</Sidebar.Group>
+</Sidebar.Group> 

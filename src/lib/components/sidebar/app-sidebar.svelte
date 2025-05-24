@@ -1,18 +1,10 @@
 <script lang="ts" module>
 	import AudioWaveform from "@lucide/svelte/icons/audio-waveform";
-	import ChartPie from "@lucide/svelte/icons/chart-pie";
 	import Command from "@lucide/svelte/icons/command";
-	import Frame from "@lucide/svelte/icons/frame";
 	import GalleryVerticalEnd from "@lucide/svelte/icons/gallery-vertical-end";
-	import Map from "@lucide/svelte/icons/map";
 
 	// This is sample data.
 	const data = {
-		user: {
-			name: "shadcn",
-			email: "m@example.com",
-			avatar: "/avatars/shadcn.jpg",
-		},
 		teams: [
 			{
 				name: "Acme Inc",
@@ -29,39 +21,38 @@
 				logo: Command,
 				plan: "Free",
 			},
-		],
-		projects: [
-			{
-				name: "Design Engineering",
-				url: "#",
-				icon: Frame,
-			},
-			{
-				name: "Sales & Marketing",
-				url: "#",
-				icon: ChartPie,
-			},
-			{
-				name: "Travel",
-				url: "#",
-				icon: Map,
-			},
-		],
+		]
+		// pages data is passed as a prop
 	};
 </script>
 
 <script lang="ts">
-	import NavProjects from "$lib/components/sidebar/nav-projects.svelte";
+	import NavPages from "$lib/components/sidebar/nav-pages.svelte";
 	import NavUser from "$lib/components/sidebar/nav-user.svelte";
 	import TeamSwitcher from "$lib/components/sidebar/team-switcher.svelte";
 	import * as Sidebar from "$lib/components/ui/sidebar/index.js";
-	import type { ComponentProps } from "svelte";
+	import type { ComponentProps, SvelteComponent } from "svelte"; // Added SvelteComponent for icon type
+	import type { User } from '@supabase/supabase-js';
+
+	// Define a more specific type for page items, including the icon
+	interface PageItem {
+		name: string;
+		url: string;
+		icon: any; // Changed from typeof SvelteComponent to any for broader compatibility
+	}
 
 	let {
 		ref = $bindable(null),
 		collapsible = "icon",
+		user,
+		handleLogout,
+		pages, // Add pages prop
 		...restProps
-	}: ComponentProps<typeof Sidebar.Root> = $props();
+	}: ComponentProps<typeof Sidebar.Root> & {
+		user: User | null;
+		handleLogout: () => Promise<void>;
+		pages: PageItem[]; // Use the PageItem interface for the pages prop
+	} = $props();
 </script>
 
 <Sidebar.Root bind:ref {collapsible} {...restProps}>
@@ -69,10 +60,17 @@
 		<TeamSwitcher teams={data.teams} />
 	</Sidebar.Header>
 	<Sidebar.Content>
-		<NavProjects projects={data.projects} />
+		<!-- Pass pages prop to NavPages -->
+		<NavPages {pages} />
 	</Sidebar.Content>
 	<Sidebar.Footer>
-		<NavUser user={data.user} />
+		{#if user}
+			<NavUser user={{
+				name: user.user_metadata?.full_name || user.email || 'User',
+				email: user.email || '',
+				avatar: user.user_metadata?.avatar_url
+			}} {handleLogout} />
+		{/if}
 	</Sidebar.Footer>
 	<Sidebar.Rail />
 </Sidebar.Root>
