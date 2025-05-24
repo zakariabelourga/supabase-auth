@@ -8,7 +8,7 @@
     <title>Dashboard</title>
 </svelte:head>
 
-<div class="container mx-auto p-4 md:p-8">
+<div class="">
     <h1 class="text-3xl font-bold mb-4">Private Dashboard</h1>
     <p class="mb-2">Welcome to the protected area!</p>
     <p class="mb-6">You are successfully logged in.</p>

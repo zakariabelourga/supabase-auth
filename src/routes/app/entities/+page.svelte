@@ -75,7 +75,7 @@
     <title>My Entities</title>
 </svelte:head>
 
-<div class="container mx-auto p-4 md:p-8">
+<div class="">
     <div class="flex justify-between items-center mb-6">
         <h1 class="text-3xl font-bold">My Providers / Entities</h1>
         <button 

@@ -9,9 +9,9 @@
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 
 	// Icons for pages navigation
-	import Frame from "@lucide/svelte/icons/frame";
-	import ChartPie from "@lucide/svelte/icons/chart-pie";
-	import Map from "@lucide/svelte/icons/map";
+	import House from "@lucide/svelte/icons/house";
+	import TableProperties from "@lucide/svelte/icons/table-properties";
+	import Building2 from "@lucide/svelte/icons/building-2";
 
 	let { data, children } = $props();
 	let { supabase, session, user } = $derived(data);
@@ -33,17 +33,17 @@
 		{
 			name: "Home",
 			url: "/app",
-			icon: Frame,
+			icon: House,
 		},
 		{
 			name: "Items",
 			url: "/app/items",
-			icon: ChartPie,
+			icon: TableProperties,
 		},
 		{
 			name: "Entities",
 			url: "/app/entities",
-			icon: Map,
+			icon: Building2,
 		},
 	];
 
@@ -101,7 +101,7 @@
 				</Breadcrumb.Root>
 			</div>
 		</header>
-		<main class="flex flex-1 flex-col gap-4 p-4 pt-0">
+		<main class="flex flex-1 flex-col gap-4 p-6 pt-0 w-full max-w-[1900px] mx-auto">
 			<Toaster position="top-center" />
 			{@render children()}
 		</main>

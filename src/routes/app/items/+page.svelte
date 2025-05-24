@@ -119,7 +119,7 @@
 	onOpenChange={handleAddDialogOpenChange}
 />
 
-<div class="container">
+<div class="">
 	<div class="mb-6 flex items-center justify-between">
 		<h1 class="text-3xl font-bold">My Expiration Items</h1>
 		<Button

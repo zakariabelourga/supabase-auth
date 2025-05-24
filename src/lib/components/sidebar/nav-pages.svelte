@@ -1,6 +1,6 @@
 <script lang="ts">
 	import * as Sidebar from "$lib/components/ui/sidebar/index.js";
-	import { page } from "$app/stores";
+	import { page } from "$app/state";
 
 	let {
 		pages, // Renamed from projects
@@ -20,7 +20,7 @@
 	<Sidebar.Menu>
 		{#each pages as item (item.name)} 
 			<Sidebar.MenuItem>
-				<Sidebar.MenuButton isActive={$page.url.pathname === item.url}>
+				<Sidebar.MenuButton isActive={page.url.pathname === item.url}>
 					{#snippet child({ props })}
 						<a href={item.url} {...props}>
 							<item.icon />
