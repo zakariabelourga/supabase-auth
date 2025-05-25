@@ -2,6 +2,7 @@
     import { enhance } from '$app/forms';
     import { type SubmitFunction } from '@sveltejs/kit';
     import type { Entity } from '$lib/types';
+    import * as Table from '$lib/components/ui/table/index.js';
 
     let { data, form } = $props();
     let { entities } = $derived(data);
@@ -152,23 +153,23 @@
 
     <!-- Entities List -->
     {#if entities.length > 0}
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created At</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
-                    {#each entities as entity, i (entity.id)}
-                        <tr class={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                            <td class="px-6 py-4 whitespace-nowrap">{entity.name}</td>
-                            <td class="px-6 py-4 whitespace-nowrap">{entity.description ?? '-'}</td>
-                            <td class="px-6 py-4 whitespace-nowrap">{new Date(entity.created_at).toLocaleDateString()}</td>
-                            <td class="px-6 py-4 whitespace-nowrap space-x-2">
+        <div class="overflow-x-auto border rounded-lg">
+            <Table.Root>
+				<Table.Header>
+					<Table.Row>
+						<Table.Head class="w-[100px]">Name</Table.Head>
+						<Table.Head>Description</Table.Head>
+						<Table.Head>Created At</Table.Head>
+						<Table.Head>Actions</Table.Head>
+					</Table.Row>
+				</Table.Header>
+				<Table.Body>
+					{#each entities as entity, i (entity.id)}
+						<Table.Row class={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+							<Table.Cell class="px-6 py-4 whitespace-nowrap">{entity.name}</Table.Cell>
+                            <Table.Cell class="px-6 py-4 whitespace-nowrap">{entity.description ?? '-'}</Table.Cell>
+                            <Table.Cell class="px-6 py-4 whitespace-nowrap">{new Date(entity.created_at).toLocaleDateString()}</Table.Cell>
+                            <Table.Cell class="px-6 py-4 whitespace-nowrap space-x-2">
                                 <button 
                                     class="text-sm px-2 py-1 text-blue-600 hover:text-blue-800 disabled:opacity-50 disabled:cursor-not-allowed" 
                                     onclick={() => startEditing(entity)}
@@ -198,11 +199,11 @@
                                         Delete
                                     </button>
                                 </form>
-                            </td>
-                        </tr>
-                    {/each}
-                </tbody>
-            </table>
+                            </Table.Cell>
+						</Table.Row>
+					{/each}
+				</Table.Body>
+			</Table.Root>
         </div>
     {:else}
         <p class="text-center text-gray-500 mt-8">

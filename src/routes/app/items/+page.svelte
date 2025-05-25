@@ -6,6 +6,7 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import type { ItemEntry as Item } from '$lib/types';
 	import { toast } from 'svelte-sonner';
+	import * as Table from '$lib/components/ui/table/index.js';
 
 	// Define FormActionData for this page's actions
 	interface AddItemFormValues {
@@ -36,7 +37,7 @@
 		data: any;
 		form: ActionResult<Partial<ItemsPageFormActionData>, Partial<ItemsPageFormActionData>> | null;
 	} = $props();
-	
+
 	let { items, categories, entities } = $derived(data);
 
 	// Helper to get data from form result (adapted from [itemId] page)
@@ -132,27 +133,27 @@
 	</div>
 
 	{#if items.length > 0}
-		<div class="overflow-x-auto">
-			<table class="w-full">
-				<thead>
-					<tr>
-						<th>Name</th>
-						<th>Description</th>
-						<th>Provider/Entity</th>
-						<th>Category</th>
-						<th>Tags</th>
-						<th>Expires On</th>
-						<th>Actions</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each items as item (item.id)}
-						<tr>
-							<td>{item.name}</td>
-							<td>{item.description ?? '-'}</td>
-							<td>{getEntityDisplayName(item)}</td>
-							<td>{item.category?.name ?? '-'}</td>
-							<td>
+		<div class="overflow-x-auto border rounded-lg">
+			<Table.Root>
+				<Table.Header>
+					<Table.Row>
+						<Table.Head class="">Name</Table.Head>
+						<Table.Head>Description</Table.Head>
+						<Table.Head>Provider/Entity</Table.Head>
+						<Table.Head>Category</Table.Head>
+						<Table.Head>Tags</Table.Head>
+						<Table.Head>Expires On</Table.Head>
+						<Table.Head>Actions</Table.Head>
+					</Table.Row>
+				</Table.Header>
+				<Table.Body>
+					{#each items as item, i (item.id)}
+						<Table.Row class={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+							<Table.Cell class="font-medium">{item.name}</Table.Cell>
+							<Table.Cell>{item.description ?? '-'}</Table.Cell>
+							<Table.Cell>{getEntityDisplayName(item)}</Table.Cell>
+							<Table.Cell>{item.category?.name ?? '-'}</Table.Cell>
+							<Table.Cell>
 								{#if item.tags && item.tags.length > 0}
 									{#each item.tags as tag (tag.id)}
 										<span class="mr-1">{tag.name}</span>
@@ -160,9 +161,9 @@
 								{:else}
 									-
 								{/if}
-							</td>
-							<td>{new Date(item.expiration).toLocaleDateString()}</td>
-							<td>
+							</Table.Cell>
+							<Table.Cell>{new Date(item.expiration).toLocaleDateString()}</Table.Cell>
+							<Table.Cell>
 								<a
 									href={`/app/items/${item.id}`}
 									class="inline-flex items-center rounded px-2 py-1 text-xs hover:bg-gray-100"
@@ -187,11 +188,11 @@
 										Delete
 									</button>
 								</form>
-							</td>
-						</tr>
+							</Table.Cell>
+						</Table.Row>
 					{/each}
-				</tbody>
-			</table>
+				</Table.Body>
+			</Table.Root>
 		</div>
 	{:else}
 		<div class="rounded-lg border bg-muted/30 p-10 text-center">
