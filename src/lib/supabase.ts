@@ -58,6 +58,7 @@ export type Database = {
           description: string | null
           id: string
           name: string
+          team_id: string | null
           user_id: string
         }
         Insert: {
@@ -65,6 +66,7 @@ export type Database = {
           description?: string | null
           id?: string
           name: string
+          team_id?: string | null
           user_id: string
         }
         Update: {
@@ -72,9 +74,18 @@ export type Database = {
           description?: string | null
           id?: string
           name?: string
+          team_id?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_entities_team_id"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       item_notes: {
         Row: {
@@ -151,6 +162,7 @@ export type Database = {
           expiration: string
           id: string
           name: string
+          team_id: string | null
           updated_at: string | null
           user_id: string
         }
@@ -163,6 +175,7 @@ export type Database = {
           expiration: string
           id?: string
           name: string
+          team_id?: string | null
           updated_at?: string | null
           user_id: string
         }
@@ -175,10 +188,18 @@ export type Database = {
           expiration?: string
           id?: string
           name?: string
+          team_id?: string | null
           updated_at?: string | null
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_items_team_id"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "items_category_id_fkey"
             columns: ["category_id"]
@@ -234,21 +255,31 @@ export type Database = {
           created_at: string | null
           id: string
           name: string
+          team_id: string | null
           user_id: string
         }
         Insert: {
           created_at?: string | null
           id?: string
           name: string
+          team_id?: string | null
           user_id: string
         }
         Update: {
           created_at?: string | null
           id?: string
           name?: string
+          team_id?: string | null
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_tags_team_id"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tags_user_id_fkey1"
             columns: ["user_id"]
@@ -258,15 +289,114 @@ export type Database = {
           },
         ]
       }
+      team_invitations: {
+        Row: {
+          created_at: string
+          email_invited: string
+          expires_at: string | null
+          id: string
+          invited_by_user_id: string
+          status: Database["public"]["Enums"]["invitation_status"]
+          team_id: string
+        }
+        Insert: {
+          created_at?: string
+          email_invited: string
+          expires_at?: string | null
+          id?: string
+          invited_by_user_id: string
+          status?: Database["public"]["Enums"]["invitation_status"]
+          team_id: string
+        }
+        Update: {
+          created_at?: string
+          email_invited?: string
+          expires_at?: string | null
+          id?: string
+          invited_by_user_id?: string
+          status?: Database["public"]["Enums"]["invitation_status"]
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_invitations_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_members: {
+        Row: {
+          joined_at: string
+          role: Database["public"]["Enums"]["team_role"]
+          team_id: string
+          user_id: string
+        }
+        Insert: {
+          joined_at?: string
+          role: Database["public"]["Enums"]["team_role"]
+          team_id: string
+          user_id: string
+        }
+        Update: {
+          joined_at?: string
+          role?: Database["public"]["Enums"]["team_role"]
+          team_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_members_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      teams: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          owner_user_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          owner_user_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          owner_user_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_user_role_in_team: {
+        Args: { p_team_id: string; p_user_id: string }
+        Returns: Database["public"]["Enums"]["team_role"]
+      }
+      is_team_member: {
+        Args: { p_team_id: string; p_user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      invitation_status: "pending" | "accepted" | "declined"
+      team_role: "admin" | "editor" | "viewer"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -384,6 +514,9 @@ export const Constants = {
     Enums: {},
   },
   public: {
-    Enums: {},
+    Enums: {
+      invitation_status: ["pending", "accepted", "declined"],
+      team_role: ["admin", "editor", "viewer"],
+    },
   },
 } as const

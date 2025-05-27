@@ -7,4 +7,6 @@
         goto("/app");
     });
   </script>
+
+  <!-- This page will be the landing page for this saas-->
    
