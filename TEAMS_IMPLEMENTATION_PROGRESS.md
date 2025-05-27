@@ -47,17 +47,18 @@ This document summarizes the development progress for implementing the Teams fun
 
 *   `public.is_team_member(p_team_id uuid, p_user_id uuid) RETURNS boolean`: Checks if a user is a member of a team.
 *   `public.get_user_role_in_team(p_team_id uuid, p_user_id uuid) RETURNS public.team_role`: Gets a user's role in a team.
+*   **NEW:** `public.get_user_id_by_email(email_text text) RETURNS uuid` (SECURITY DEFINER): Retrieves a user's ID by their email address. Used for the invite functionality.
 
-**E. Row Level Security (RLS) Policies Defined and Applied:**
+**E. Row Level Security (RLS) Policies Defined and Applied (All policies are now in a secure and functional state):**
 
 *   **`public.teams`**:
-    *   `INSERT`: "Allow authenticated users to create teams" (`WITH CHECK (true)` for `authenticated`).
-    *   `SELECT`: "Allow members to view their teams" (`USING (true)` for `authenticated`) - **CURRENTLY INSECURE AND TEMPORARY for debugging team creation. Needs to be reverted to `USING (public.is_team_member(id, auth.uid()))`**.
-    *   `UPDATE`: "Allow team admins to update their teams" (Admins can update).
-    *   `DELETE`: "Allow team admins to delete their teams" (Admins can delete).
+    *   `INSERT`: "Allow authenticated users to create teams" (`WITH CHECK (owner_user_id = auth.uid())`). Ensures the creator is set as the owner.
+    *   `SELECT`: "Allow members or owner to view their teams" (`USING (public.is_team_member(id, auth.uid()) OR owner_user_id = auth.uid())`).
+    *   `UPDATE`: "Allow team admins to update their teams" (`USING (public.get_user_role_in_team(id, auth.uid()) = 'admin'::public.team_role) WITH CHECK (public.get_user_role_in_team(id, auth.uid()) = 'admin'::public.team_role)`).
+    *   `DELETE`: "Allow team admins to delete their teams" (`USING (public.get_user_role_in_team(id, auth.uid()) = 'admin'::public.team_role)`).
 *   **`public.team_members`**:
-    *   `SELECT`: "View team members" (`USING (public.is_team_member(public.team_members.team_id, auth.uid()))` - fixed from recursive version).
-    *   `INSERT`: "Admins can add team members" (Admins can add).
+    *   `SELECT`: "View team members" (`USING (public.is_team_member(public.team_members.team_id, auth.uid()))`).
+    *   `INSERT`: "Admins can add team members OR owner can add self as admin during team creation" (`WITH CHECK (((get_user_role_in_team(team_id, auth.uid()) = 'admin'::team_role) OR (EXISTS (SELECT 1 FROM public.teams t WHERE t.id = team_members.team_id AND t.owner_user_id = auth.uid()) AND team_members.user_id = auth.uid() AND team_members.role = 'admin'::team_role)))`). This resolved the team creation blocker.
     *   `UPDATE`: "Admins can update roles of other team members" (Admins can update others' roles, immutability of `team_id`, `user_id` handled by trigger).
     *   `DELETE`: "Admins can remove other team members" & "Members can leave team".
 *   **`public.team_invitations`**:
@@ -83,12 +84,13 @@ This document summarizes the development progress for implementing the Teams fun
 *   The `authenticated` role has been granted `SELECT`, `INSERT`, `UPDATE`, `DELETE` (and others) on `public.teams`.
 *   Similar grants likely exist or were implicitly handled for other tables based on RLS setup.
 
-### 2. Type Generation
+### 2. Type Generation & Configuration
 
-*   Supabase type definitions (`src/lib/supabase.ts` or similar) were assumed to be updated by the user after schema changes.
+*   Supabase type definitions (`src/lib/supabase.ts`) were regenerated after schema changes and login issues were resolved. This fixed type errors for RPC calls.
 *   Custom types in `src/lib/types.ts` were updated:
     *   Added `team_id: string | null;` to `LinkedEntity`, `Entity`, `Tag`, `ItemEntry`.
     *   Added new types: `TeamRole` (enum), `InvitationStatus` (enum), `Team` (interface), `TeamMember` (interface), `TeamInvitation` (interface).
+*   `src/app.d.ts` correctly imports `Database` from `src/lib/supabase.ts` for `SupabaseClient` typing.
 
 ### 3. Data Migration Strategy & Script
 
@@ -99,26 +101,97 @@ This document summarizes the development progress for implementing the Teams fun
 
 ### 4. Server-Side API Endpoints (SvelteKit)
 
-*   **`src/routes/app/teams/+page.server.ts`** created:
-    *   **`load` function**: Fetches and returns a list of teams the current user is a member of (along with their role in each team). This is now working after fixing `team_members` RLS recursion.
-    *   **`actions.createTeam`**: 
-        *   Attempts to create a new team in the `teams` table.
-        *   Then attempts to add the creator as an 'admin' in the `team_members` table.
-        *   **Current Status**: The insertion into `teams` now works (after temporarily making its `SELECT` RLS `USING (true)` to allow `.select()` to function post-insert). However, the subsequent insertion into `team_members` fails due to RLS (`WITH CHECK (public.get_user_role_in_team(team_id, auth.uid()) = 'admin')`), as the user is not yet an admin of the brand new team.
+*   **`src/routes/app/teams/+page.server.ts`** updated:
+    *   **`load` function**: Fetches and returns a list of teams the current user is a member of (along with their role in each team). This is working correctly.
+    *   **`actions.createTeam`**:
+        *   Successfully creates a new team and adds the creator as an 'admin'.
+        *   Returns an explicit success object `{ success: true, message: ..., teamId: ..., teamName: ..., error: null }` for consistent frontend handling.
+    *   **`actions.renameTeam`**: Implemented to allow admins to rename their teams. Returns success/failure objects.
+    *   **`actions.deleteTeam`**: Implemented to allow admins to delete their teams. Returns success/failure objects.
+    *   **`actions.inviteUser`**: Implemented to allow admins to invite users by email.
+        *   Uses the `get_user_id_by_email` RPC.
+        *   Checks if the user is already a member.
+        *   Adds the user to `team_members` (currently, direct add; `team_invitations` table usage to be reviewed).
+        *   Returns success/failure objects.
 
-*   **`src/routes/app/teams/+page.svelte`** created:
-    *   Displays the list of teams fetched by the `load` function.
-    *   Provides a form to create a new team, calling the `createTeam` action.
-    *   Handles form feedback (success/error messages).
-    *   A Svelte linter error regarding `form.error = undefined` was fixed.
+### 5. Frontend UI (`+page.svelte`)
 
-## Current Status & Immediate Next Steps
+*   Displays the list of teams fetched by the `load` function.
+*   **Create Team Form**:
+    *   Calls the `createTeam` action.
+    *   Handles form feedback (success/error messages) correctly due to standardized action return types.
+*   **Admin Controls (per team, for admins only)**:
+    *   **Rename Team**: Inline form, calls `renameTeam` action.
+    *   **Invite User**: Inline form (email, role), calls `inviteUser` action.
+    *   **Delete Team**: Button with confirmation dialog, calls `deleteTeam` action.
+*   **Form Handling**:
+    *   `use:enhance` used for all actions.
+    *   `handleAdminActionSubmit` function manages common logic for admin actions (invalidate data, update UI state).
+    *   `handleCreateSuccess` function for create team specific UI updates.
+*   **TypeScript/Linting**:
+    *   `result: ActionResult` and `update` parameters in `use:enhance` callbacks are explicitly typed.
+    *   The `(form as any)?.error` type assertion is used in the template for admin action feedback to accommodate varying `ActionData` shapes while still allowing access to a potential `error` field.
 
-1.  **Team Creation Blocked:** The primary blocker is the RLS on `team_members` preventing the `createTeam` action from adding the team creator as the initial admin.
-2.  **Insecure `SELECT` RLS on `teams`:** The `SELECT` RLS policy on `public.teams` is temporarily set to `USING (true)`, which is insecure. This needs to be reverted to `USING (public.is_team_member(id, auth.uid()))` once team creation is fixed.
-3.  **User Preference:** The user has expressed a preference to solve the team creation transactional issue (inserting into `teams` and then `team_members`) by adjusting RLS policies rather than implementing a `SECURITY DEFINER` database function.
+## Current Status & Next Steps
 
-**Planned Next Move:**
+*   **Core Functionality Implemented**:
+    *   Team creation is fully functional and secure.
+    *   Team renaming by admins is implemented.
+    *   Team deletion by admins is implemented (with cascading member removal).
+    *   User invitation by email (direct add to `team_members`) by admins is implemented.
+*   **RLS Policies**: All relevant RLS policies are in a secure and functional state.
+*   **Frontend UI**: Basic UI for all implemented team management features is in place with feedback mechanisms.
+*   **TypeScript**: Major type errors have been resolved.
 
-*   Modify the `INSERT` RLS policy on the `public.team_members` table. The updated policy will allow a user to be added as an 'admin' to a team if they are the `owner_user_id` of that team (specifically for the initial setup). This will allow the existing SvelteKit `createTeam` action (with its two separate insert steps) to succeed.
-*   After confirming successful team creation with the modified RLS, revert the `SELECT` RLS policy on `public.teams` to its secure version: `USING (public.is_team_member(id, auth.uid()))`. 
+**Immediate Next Steps / Areas for Review & Refinement:**
+
+1.  **Full Invitation System & Notifications (Refined from TF FR2.1-FR2.3, FR2.2):**
+    *   Modify the `inviteUser` action to create records in the `team_invitations` table instead of directly adding to `team_members`.
+    *   Implement UI for users to view their pending invitations (e.g., in an account section or via a dedicated "Invitations" page/modal).
+    *   Create server actions and corresponding UI for users to `accept` or `decline` team invitations.
+    *   Integrate UI notifications (e.g., toasts/popups as per existing Next Step) for:
+        *   Receiving a new team invitation.
+        *   Successful/failed invitation acceptance/declination.
+        *   Confirmation when an admin sends an invitation.
+
+2.  **Comprehensive Team & Member Management (from TF FR1.3, FR1.5.1, FR2.5, FR2.6, FR2.7, FR2.8):**
+    *   **Team Settings:**
+        *   Implement a check for team name uniqueness (globally or per user) during team creation and renaming.
+        *   Define and implement a clear strategy for handling associated data (items, entities, tags) when a team is deleted (e.g., prevent deletion if not empty, prompt admin to archive/delete data, or allow transfer). This will likely involve updating the `deleteTeam` action and RLS.
+    *   **Member Management (UI and Actions):**
+        *   UI for Team Admins to change the roles of existing team members.
+        *   UI for Team Admins to remove members from the team.
+        *   UI for non-admin members to voluntarily leave a team.
+    *   **Edge Cases:**
+        *   Implement logic to handle scenarios where the sole Admin/Owner attempts to leave the team or if their account is deleted (e.g., require ownership transfer or team deletion).
+
+3.  **Active Team Context Switching (from TF FR4.1-FR4.3):**
+    *   Develop UI for users to select an "active" team context (e.g., a dropdown in the main application layout).
+    *   Implement state management (e.g., Svelte store, potentially persisted in `localStorage`) for the `activeTeamId`.
+    *   Ensure all data displays (item lists, dashboards) and data creation forms are filtered by and associated with the `activeTeamId`.
+    *   Provide a clear visual indicator of the currently active team in the UI.
+
+4.  **New User Onboarding - Automatic Personal Team (from TF FR1.7):**
+    *   Implement a mechanism (e.g., Supabase trigger on `auth.users` table insertion, or logic in the post-signup flow) to automatically create a "Personal Team" for every new user.
+    *   The new user should be automatically set as the 'admin' of this personal team.
+
+5.  **Role-Based Access Control (RBAC) Refinement & Testing (from TF FR2.4):**
+    *   Thoroughly test and verify the permissions for `Admin`, `Editor`, and `Viewer` roles across all team-related functionalities (not just item CRUD).
+    *   Ensure UI for assigning roles during invitation (and role changes) accurately reflects these defined roles.
+    *   Clarify and document specific capabilities of `Editor` and `Viewer` roles beyond basic data access (e.g., can an editor see team member list but not manage them?).
+
+6.  **Error Handling & User Feedback (Existing Next Step - Enhanced):**
+    *   Continuously review and enhance user-facing error messages for clarity and helpfulness across all new and existing team actions.
+    *   Ensure all edge cases identified (e.g., inviting non-existent users, sole admin issues) are gracefully handled and communicated.
+
+7.  **UI/UX Polish (Existing Next Step - Enhanced):**
+    *   Refine the styling, layout, and overall user experience of all team management forms, lists, and controls.
+    *   Consider UX improvements like disabling buttons during form submissions, loading indicators, and intuitive navigation for team settings and member management.
+
+8.  **Comprehensive Testing (Existing Next Step - Enhanced):**
+    *   Conduct thorough testing of all implemented functionalities, including all points mentioned above (invitation flow, role permissions, team context switching, new user onboarding, edge cases).
+    *   Test RLS policy enforcement rigorously.
+
+9.  **Code Cleanup & Documentation (Existing Next Step - Enhanced):**
+    *   Review code for any remaining TODOs, comments, or areas for refactoring.
+    *   Update internal documentation (like this progress file) and consider if any user-facing guides are needed for team features.

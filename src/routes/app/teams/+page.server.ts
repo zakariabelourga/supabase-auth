@@ -77,8 +77,143 @@ export const actions: Actions = {
             return fail(500, { teamName, error: 'Team created, but failed to set you as admin. Team creation rolled back.' });
         }
 
-        // Optionally, redirect to the new team's page or settings page
-        // redirect(303, `/app/teams/${newTeam.id}/settings`);
-        return { success: true, teamId: newTeam.id, teamName: newTeam.name }; // Or return data for the current page to update
+        // Return a success response
+        return {
+            success: true,
+            message: `Team "${newTeam.name}" created successfully!`, // Provide a success message
+            teamId: newTeam.id, // Pass back the new team's ID for potential use in UI
+            teamName: newTeam.name, // Pass back the new team's name
+            error: null // Explicitly include error as null for type consistency
+        };
     },
+
+    renameTeam: async ({ request, locals: { supabase, session } }) => {
+        if (!session) {
+            return fail(401, { error: 'Unauthorized' });
+        }
+
+        const formData = await request.formData();
+        const teamId = formData.get('teamId') as string;
+        const newName = formData.get('newName') as string;
+
+        if (!teamId) {
+            return fail(400, { newName, error: 'Team ID is required.' });
+        }
+        if (!newName || newName.trim().length < 3) {
+            return fail(400, { newName, error: 'New team name must be at least 3 characters long.' });
+        }
+
+        const { error } = await supabase
+            .from('teams')
+            .update({ name: newName.trim() })
+            .eq('id', teamId);
+
+        if (error) {
+            console.error('Error renaming team:', error);
+            if (error.code === '42501') { // RLS violation
+                return fail(403, { newName, error: 'You do not have permission to rename this team.' });
+            }
+            return fail(500, { newName, error: 'Failed to rename the team. Please try again.' });
+        }
+
+        return { success: true, message: 'Team renamed successfully.', teamId, newName: newName.trim() };
+    },
+
+    deleteTeam: async ({ request, locals: { supabase, session } }) => {
+        if (!session) {
+            return fail(401, { error: 'Unauthorized' });
+        }
+
+        const formData = await request.formData();
+        const teamId = formData.get('teamId') as string;
+
+        if (!teamId) {
+            return fail(400, { error: 'Team ID is required.' });
+        }
+
+        const { error } = await supabase
+            .from('teams')
+            .delete()
+            .eq('id', teamId);
+
+        if (error) {
+            console.error('Error deleting team:', error);
+            if (error.code === '42501') { // RLS violation
+                return fail(403, { error: 'You do not have permission to delete this team.' });
+            }
+            return fail(500, { error: 'Failed to delete the team. Please try again.' });
+        }
+
+        return { success: true, message: 'Team deleted successfully.', teamId };
+    },
+
+    inviteUser: async ({ request, locals: { supabase, session } }) => {
+        if (!session) {
+            return fail(401, { error: 'Unauthorized' });
+        }
+
+        const formData = await request.formData();
+        const teamId = formData.get('teamId') as string;
+        const userEmail = formData.get('userEmail') as string;
+        const role = formData.get('role') as TeamMember['role']; // 'admin', 'editor', or 'viewer'
+
+        if (!teamId || !userEmail || !role) {
+            return fail(400, { userEmail, role, error: 'Team ID, user email, and role are required.' });
+        }
+
+        if (!['editor', 'viewer', 'admin'].includes(role)) {
+            return fail(400, { userEmail, role, error: "Invalid role. Must be 'editor', 'viewer', or 'admin'." });
+        }
+
+        // 1. Get the user ID from the email using the RPC function
+        const { data: invitedUserData, error: rpcError } = await supabase
+            .rpc('get_user_id_by_email', { email_text: userEmail.toLowerCase().trim() });
+
+        if (rpcError || !invitedUserData) {
+            console.error('Error fetching user by email or user not found:', rpcError);
+            return fail(404, { userEmail, role, error: 'User with this email not found.' });
+        }
+
+        const invitedUserId = invitedUserData as string; // RPC returns the UUID directly
+
+        if (invitedUserId === session.user.id) {
+            return fail(400, { userEmail, role, error: 'You cannot invite yourself to the team.'});
+        }
+
+        // 2. Check if the user is already a member of the team
+        const { data: existingMember, error: checkMemberError } = await supabase
+            .from('team_members')
+            .select('team_id')
+            .eq('team_id', teamId)
+            .eq('user_id', invitedUserId)
+            .maybeSingle(); 
+
+        if (checkMemberError) {
+            console.error('Error checking existing member:', checkMemberError);
+            return fail(500, { userEmail, role, error: 'Could not verify team membership. Please try again.' });
+        }
+
+        if (existingMember) {
+            return fail(409, { userEmail, role, error: 'This user is already a member of the team.' });
+        }
+
+        // 3. Add the user to the team_members table
+        const { error: insertMemberError } = await supabase
+            .from('team_members')
+            .insert({
+                team_id: teamId,
+                user_id: invitedUserId,
+                role: role
+            });
+
+        if (insertMemberError) {
+            console.error('Error adding member to team:', insertMemberError);
+            if (insertMemberError.code === '42501') { // RLS violation on team_members insert
+                return fail(403, { userEmail, role, error: 'You do not have permission to add members to this team.' });
+            }
+            return fail(500, { userEmail, role, error: 'Failed to add user to the team. Please try again.' });
+        }
+
+        return { success: true, message: `User ${userEmail} invited to the team as ${role}.`, teamId };
+    }
 }; 
