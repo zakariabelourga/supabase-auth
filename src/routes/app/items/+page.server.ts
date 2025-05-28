@@ -1,48 +1,52 @@
 import { fail, redirect, type Actions } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { error as svelteKitError } from '@sveltejs/kit';
-import type { AuthenticatedEvent, Entity, ItemEntry as ItemWithRelations, Category } from '$lib/types';
-import { listItemsForUser, createItem, type CreateItemPayload, deleteItemById } from '$lib/server/db/items';
+import type { Entity, ItemEntry as ItemWithRelations, Category, ActiveTeam } from '$lib/types'; 
+import { listItemsForTeam, createItem, type CreateItemPayload, deleteItemById } from '$lib/server/db/items'; 
 import { getAllCategories } from '$lib/server/db/categories';
-import { getEntitiesForUser } from '$lib/server/db/entities';
+import { getEntitiesForTeam } from '$lib/server/db/entities'; 
 
-export const load: PageServerLoad = async ({ locals: { supabase, session } }) => {
+export const load: PageServerLoad = async (event) => {
+	const { locals: { supabase, session, activeTeam } } = event; 
 	if (!session) {
 		redirect(303, '/');
 	}
 
+	if (!activeTeam?.id) {
+		console.warn('No active team found for user, redirecting.');
+		redirect(303, '/app/teams?notice=no-active-team'); 
+	}
+
 	try {
-		// Fetch data in parallel
 		const [items, categories, entities] = await Promise.all([
-			listItemsForUser(supabase, session.user.id),
+			listItemsForTeam(supabase, activeTeam.id),
 			getAllCategories(supabase),
-			getEntitiesForUser(supabase, session.user.id)
+			getEntitiesForTeam(supabase, activeTeam.id)
 		]);
 
-		// No need to process items further if listItemsForUser already returns them correctly typed
 		return {
-			items: items,
-			categories: categories,
-			entities: entities,
+			items: items as ItemWithRelations[], 
+			categories: categories as Category[],
+			entities: entities as Entity[],
 			streamed: {}
 		};
 
 	} catch (error: any) {
-		console.error('Error in load function:', error);
-		// Handle errors from listItemsForUser or other awaited promises
+		console.error('Error in load function (items page):', error);
 		svelteKitError(500, { message: error.message || 'An unexpected error occurred while loading page data.' });
-		// SvelteKit will automatically return a 500 error page, 
-		// so no explicit return needed here in the catch block if you throw.
-		// If you want to return specific error data to the page, you could do that here too.
-		// For now, throwing the error is fine as SvelteKit handles it.
-		throw error; // Re-throw to let SvelteKit handle the error page rendering
+		throw error; 
 	}
 };
 
 export const actions: Actions = {
-	addItem: async ({ request, locals: { supabase, session } }: AuthenticatedEvent) => {
+	addItem: async (event) => {
+		const { request, locals: { supabase, session, activeTeam } } = event;
 		if (!session) {
 			return fail(401, { message: 'Unauthorized' });
+		}
+
+		if (!activeTeam?.id) {
+			return fail(400, { message: 'No active team selected. Please select or create a team.' });
 		}
 
 		const formData = await request.formData();
@@ -52,9 +56,7 @@ export const actions: Actions = {
 		const expiration = formData.get('expiration') as string | null;
 		const tagsString = formData.get('tags') as string | null;
 		const entityNameManualInput = formData.get('entityNameManual') as string | null;
-		// const entityIdInput = formData.get('entityId') as string | null; // Not used by createItem directly yet
 
-		// --- Basic Validation (can remain here or be part of createItem if preferred) ---
 		if (!name || !expiration) {
 			return fail(400, {
 				message: 'Missing required fields: Name and Expiration Date are required.',
@@ -63,7 +65,8 @@ export const actions: Actions = {
 		}
 
 		const itemPayload: CreateItemPayload = {
-			userId: session.user.id,
+			teamId: activeTeam.id, 
+			creatorUserId: session.user.id, 
 			name,
 			description,
 			categoryId,
@@ -76,18 +79,17 @@ export const actions: Actions = {
 			const result = await createItem(supabase, itemPayload);
 
 			if (result.itemAddedButTagsFailed) {
-				return fail(500, { // Or a 207 Multi-Status if you want to be more specific
+				return fail(500, { 
 					message: `Item added (ID: ${result.id}), but failed to process tags: ${result.tagErrorMessage}`,
 					values: { name, description, categoryId, expiration, tagsString, entityNameManual: entityNameManualInput },
 					itemAddedButTagsFailed: true
 				});
 			}
 
-			// --- Success ---
 			return {
-				status: 201, // 201 Created
+				status: 201, 
 				message: 'Item added successfully.',
-				itemId: result.id // Optionally return the new item ID
+				itemId: result.id 
 			};
 
 		} catch (error: any) {
@@ -99,10 +101,15 @@ export const actions: Actions = {
 		}
 	},
 
-    deleteItem: async ({ request, locals: { supabase, session } }: AuthenticatedEvent) => {
+    deleteItem: async (event) => {
+        const { request, locals: { supabase, session, activeTeam } } = event;
         if (!session) {
             return fail(401, { message: 'Unauthorized' });
         }
+
+		if (!activeTeam?.id) {
+			return fail(400, { message: 'No active team selected. Cannot delete item.' });
+		}
 
         const formData = await request.formData();
         const itemId = formData.get('itemId') as string | null;
@@ -112,19 +119,18 @@ export const actions: Actions = {
         }
 
         try {
-            await deleteItemById(supabase, itemId, session.user.id);
+            await deleteItemById(supabase, itemId, activeTeam.id);
             
-            // Success - enhance handles UI update by reloading data (usually)
             return { 
                 status: 200,
                 message: 'Item deleted successfully.',
-                deletedItemId: itemId // For client-side UI updates if needed
+                deletedItemId: itemId 
             };        
         } catch (error: any) {
             console.error('Error calling deleteItemById:', error);
             return fail(500, {
                 message: error.message || 'An unexpected error occurred while deleting the item.',
-                deleteErrorId: itemId // Pass back ID for potential UI feedback
+                deleteErrorId: itemId 
             });
         }
     }

@@ -1,10 +1,9 @@
 import { createServerClient } from '@supabase/ssr'
 import { type Handle, redirect } from '@sveltejs/kit'
 import { sequence } from '@sveltejs/kit/hooks'
-
-// IMPORTANT: Replace with your actual Supabase URL and Anon Key
-// You can also use environment variables: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY
-import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public'
+import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public' //env/static/public Known linter error with SvelteKit
+import { getAllTeamsForUser, getTeamMemberRole } from '$lib/server/db/teams'
+import type { Team, ActiveTeam, TeamRole } from '$lib/types'
 
 const supabase: Handle = async ({ event, resolve }) => {
   /**
@@ -99,5 +98,68 @@ const authGuard: Handle = async ({ event, resolve }) => {
   return resolve(event)
 }
 
+const activeTeamHook: Handle = async ({ event, resolve }) => {
+  if (!event.locals.user || !event.locals.supabase) {
+    event.locals.teams = null
+    event.locals.activeTeam = null
+    return resolve(event)
+  }
+
+  const { user, supabase } = event.locals
+  let activeTeamIdFromCookie = event.cookies.get('active_team_id')
+
+  const teamsResult = await getAllTeamsForUser(supabase, user.id)
+  if (teamsResult.success && teamsResult.data) {
+    event.locals.teams = teamsResult.data
+  } else {
+    event.locals.teams = []
+    console.error('Failed to fetch teams for user or no teams found:', teamsResult.error)
+  }
+
+  let finalActiveTeam: ActiveTeam | null = null
+
+  if (event.locals.teams && event.locals.teams.length > 0) {
+    let targetTeam: Team | undefined = undefined
+
+    if (activeTeamIdFromCookie) {
+      targetTeam = event.locals.teams.find(t => t.id === activeTeamIdFromCookie)
+      if (!targetTeam) {
+        console.warn(`Active team ID ${activeTeamIdFromCookie} from cookie not found in user's teams. Clearing cookie.`)
+        event.cookies.delete('active_team_id', { path: '/' })
+        activeTeamIdFromCookie = undefined
+      }
+    }
+
+    if (!targetTeam) {
+      targetTeam = event.locals.teams[0]
+      if (targetTeam) {
+        console.log(`Setting first team ${targetTeam.id} as active by default.`)
+        event.cookies.set('active_team_id', targetTeam.id, {
+          path: '/',
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          maxAge: 60 * 60 * 24 * 30,
+        })
+      }
+    }
+
+    if (targetTeam) {
+      const roleResult = await getTeamMemberRole(supabase, targetTeam.id, user.id)
+      if (roleResult.success && roleResult.data) {
+        finalActiveTeam = {
+          ...targetTeam,
+          role: roleResult.data as TeamRole,
+        }
+      } else {
+        console.error(`Failed to get role for user ${user.id} in team ${targetTeam.id}:`, roleResult.error)
+      }
+    }
+  }
+
+  event.locals.activeTeam = finalActiveTeam
+
+  return resolve(event)
+}
 // Sequence the handlers
-export const handle: Handle = sequence(supabase, authGuard) 
+export const handle: Handle = sequence(supabase, authGuard, activeTeamHook)

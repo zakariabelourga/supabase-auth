@@ -59,16 +59,6 @@ export interface ItemDetail extends ItemEntry {
     params?: Partial<Record<string, string>>; // params can be optional
 }
 
-// Event type for SvelteKit server functions with Supabase locals
-export type AuthenticatedEvent = {
-    locals: {
-        supabase: SupabaseClient;
-        session: Session | null;
-    };
-    request: Request;
-    params?: Partial<Record<string, string>>; // params can be optional
-};
-
 // --- New Team-related Types ---
 
 // Enum for Team Roles
@@ -108,4 +98,9 @@ export interface TeamInvitation {
     // Optional: include additional details if needed for UI
     // team?: { name?: string };
     // invited_by_user?: { email?: string };
+}
+
+// Active Team definition (a Team with the current user's role in it)
+export interface ActiveTeam extends Team {
+    role: TeamRole; // User's role in this specific team
 }

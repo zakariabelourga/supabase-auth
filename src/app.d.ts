@@ -1,6 +1,7 @@
 // See https://svelte.dev/docs/kit/types#app.d.ts
 // for information about these interfaces
 import type { Session, SupabaseClient, User } from '@supabase/supabase-js'
+import type { ActiveTeam, Team, TeamRole } from '$lib/types'; 
 // Uncomment the line below if you have generated database types
  import type { Database } from './lib/supabase.ts' 
 
@@ -13,6 +14,8 @@ declare global {
 			safeGetSession: () => Promise<{ session: Session | null; user: User | null }>
 			session: Session | null
 			user: User | null
+			activeTeam: ActiveTeam | null
+			teams: Team[] | null
 		}
 		interface PageData {
 			session: Session | null

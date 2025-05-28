@@ -40,13 +40,30 @@ export const actions: Actions = {
             return fail(400, { teamName, error: 'Team name must be at least 3 characters long.' });
         }
 
-        console.log(session.user.id)
+        const trimmedTeamName = teamName.trim();
+
+        // Check if the user already owns a team with this name
+        const { data: existingUserTeam, error: existingTeamCheckError } = await supabase
+            .from('teams')
+            .select('id')
+            .eq('name', trimmedTeamName)
+            .eq('owner_user_id', session.user.id)
+            .maybeSingle();
+
+        if (existingTeamCheckError) {
+            console.error('Error checking for existing team name:', existingTeamCheckError);
+            return fail(500, { teamName: trimmedTeamName, error: 'Server error while checking team name. Please try again.' });
+        }
+
+        if (existingUserTeam) {
+            return fail(409, { teamName: trimmedTeamName, error: `You already have a team named "${trimmedTeamName}". Please choose a different name.` });
+        }
 
         // 1. Create the new team
         const { data: newTeam, error: teamError } = await supabase
             .from('teams')
             .insert({
-                name: teamName.trim(),
+                name: trimmedTeamName,
                 owner_user_id: session.user.id
             })
             .select()
@@ -54,11 +71,10 @@ export const actions: Actions = {
 
         if (teamError || !newTeam) {
             console.error('Error creating team:', teamError);
-            // Consider more specific error messages based on teamError.code (e.g., unique constraint violation for name)
-            if (teamError?.code === '23505') { // Unique violation for name (if you add a unique constraint)
-                 return fail(409, { teamName, error: 'A team with this name already exists.' });
+            if (teamError?.code === '23505') { // Unique violation (e.g., global unique constraint on name)
+                 return fail(409, { teamName: trimmedTeamName, error: 'A team with this name already exists globally. Please choose another.' });
             }
-            return fail(500, { teamName, error: 'Failed to create the team. Please try again.' });
+            return fail(500, { teamName: trimmedTeamName, error: 'Failed to create the team. Please try again.' });
         }
 
         // 2. Add the creator as an admin to the new team
@@ -74,7 +90,7 @@ export const actions: Actions = {
             console.error('Error adding team creator as admin:', memberError);
             // Attempt to clean up the created team if adding the member fails
             await supabase.from('teams').delete().eq('id', newTeam.id);
-            return fail(500, { teamName, error: 'Team created, but failed to set you as admin. Team creation rolled back.' });
+            return fail(500, { teamName: trimmedTeamName, error: 'Team created, but failed to set you as admin. Team creation rolled back.' });
         }
 
         // Return a success response
@@ -103,20 +119,60 @@ export const actions: Actions = {
             return fail(400, { newName, error: 'New team name must be at least 3 characters long.' });
         }
 
+        const trimmedNewName = newName.trim();
+
+        // 1. Get the team's owner_user_id to check for name uniqueness against the owner's other teams
+        const { data: teamData, error: teamOwnerError } = await supabase
+            .from('teams')
+            .select('owner_user_id')
+            .eq('id', teamId)
+            .single();
+
+        if (teamOwnerError || !teamData) {
+            console.error('Error fetching team owner for rename validation:', teamOwnerError);
+            // This could also be an RLS issue if the user trying to rename isn't an admin, 
+            // but the RLS on update should primarily handle that.
+            // If RLS passed for the user to even attempt rename, but team not found, it's an issue.
+            return fail(404, { newName: trimmedNewName, error: 'Team not found or could not verify owner for name validation.' });
+        }
+        const ownerId = teamData.owner_user_id;
+
+        // 2. Check if the owner already has another team with this new name
+        const { data: existingTeamWithNewName, error: existingNameError } = await supabase
+            .from('teams')
+            .select('id')
+            .eq('name', trimmedNewName)
+            .eq('owner_user_id', ownerId) // Check against the team's actual owner
+            .neq('id', teamId)           // Exclude the current team being renamed
+            .maybeSingle();
+
+        if (existingNameError) {
+            console.error('Error checking for existing team name during rename:', existingNameError);
+            return fail(500, { newName: trimmedNewName, error: 'Server error while checking new team name. Please try again.' });
+        }
+
+        if (existingTeamWithNewName) {
+            return fail(409, { newName: trimmedNewName, error: `The team owner already has another team named "${trimmedNewName}". Please choose a different name.` });
+        }
+
+        // 3. Proceed with the rename if no conflict
         const { error } = await supabase
             .from('teams')
-            .update({ name: newName.trim() })
+            .update({ name: trimmedNewName })
             .eq('id', teamId);
 
         if (error) {
             console.error('Error renaming team:', error);
             if (error.code === '42501') { // RLS violation
-                return fail(403, { newName, error: 'You do not have permission to rename this team.' });
+                return fail(403, { newName: trimmedNewName, error: 'You do not have permission to rename this team.' });
             }
-            return fail(500, { newName, error: 'Failed to rename the team. Please try again.' });
+            if (error.code === '23505') { // Unique violation (e.g., global unique constraint on name)
+                return fail(409, { newName: trimmedNewName, error: 'A team with this name already exists globally. Please choose another.' });
+            }
+            return fail(500, { newName: trimmedNewName, error: 'Failed to rename the team. Please try again.' });
         }
 
-        return { success: true, message: 'Team renamed successfully.', teamId, newName: newName.trim() };
+        return { success: true, message: 'Team renamed successfully.', teamId, newName: trimmedNewName };
     },
 
     deleteTeam: async ({ request, locals: { supabase, session } }) => {

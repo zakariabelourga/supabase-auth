@@ -3,17 +3,19 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Tag } from '$lib/types';
 
 /**
- * Finds existing tags or creates new ones for a given user.
+ * Finds existing tags or creates new ones for a given team.
  *
  * @param supabase The Supabase client instance.
- * @param userId The ID of the user.
+ * @param teamId The ID of the team.
+ * @param creatorUserId The ID of the user creating the tags (for user_id field).
  * @param tagNames An array of tag names to find or create.
  * @returns A promise that resolves to an array of tag IDs.
  * @throws Throws an error if fetching or inserting tags fails.
  */
-export async function findOrCreateTagsForUser(
+export async function findOrCreateTagsForTeam(
     supabase: SupabaseClient,
-    userId: string,
+    teamId: string,
+    creatorUserId: string,
     tagNames: string[]
 ): Promise<string[]> {
     if (tagNames.length === 0) {
@@ -26,11 +28,11 @@ export async function findOrCreateTagsForUser(
         return [];
     }
 
-    // Find existing tags for the user using normalized names
+    // Find existing tags for the team using normalized names
     const { data: existingTags, error: existingTagsError } = await supabase
         .from('tags')
-        .select('id, name') // Assuming 'name' in DB is stored normalized or comparison is effectively CI
-        .eq('user_id', userId)
+        .select('id, name') 
+        .eq('team_id', teamId) 
         .in('name', normalizedTagNames);
 
     if (existingTagsError) {
@@ -39,8 +41,6 @@ export async function findOrCreateTagsForUser(
     }
 
     const existingTagMap = new Map(existingTags.map((tag) => [tag.name, tag.id]));
-    // Ensure keys in existingTagMap are also normalized if DB names aren't guaranteed to be.
-    // However, if .in('name', normalizedTagNames) works, then existingTags.name should match.
     let allTagIds = existingTags.map((tag) => tag.id);
 
     // Identify and insert new tags (names are already normalized)
@@ -48,7 +48,7 @@ export async function findOrCreateTagsForUser(
     if (newTagsToCreate.length > 0) {
         const { data: insertedTags, error: insertTagsError } = await supabase
             .from('tags')
-            .insert(newTagsToCreate.map((name) => ({ name, user_id: userId }))) // Insert normalized names
+            .insert(newTagsToCreate.map((name) => ({ name, team_id: teamId, user_id: creatorUserId }))) 
             .select('id');
 
         if (insertTagsError) {
@@ -119,20 +119,22 @@ export async function unlinkTagsFromItem(
 }
 
 /**
- * Synchronizes tags for an item. It ensures that the item is associated only with the given new tag names.
- * This involves finding/creating tags, linking new ones, and unlinking obsolete ones.
+ * Synchronizes tags for an item within a team. It ensures that the item is associated only with the given new tag names.
+ * This involves finding/creating tags (scoped to the team), linking new ones, and unlinking obsolete ones.
  *
  * @param supabase The Supabase client instance.
  * @param itemId The ID of the item.
- * @param userId The ID of the user who owns the item and tags.
- * @param newTagNames An array of tag names that should be associated with the item.
+ * @param teamId The ID of the team that owns the item and tags.
+ * @param modifierUserId The ID of the user performing the modification (for creating new tags).
+ * @param newTagNamesFromInput An array of tag names that should be associated with the item.
  * @returns A promise that resolves when synchronization is complete.
  * @throws Throws an error if any step of tag synchronization fails.
  */
 export async function syncItemTags(
     supabase: SupabaseClient,
     itemId: string,
-    userId: string,
+    teamId: string, 
+    modifierUserId: string, 
     newTagNamesFromInput: string[]
 ): Promise<void> {
     // 1. Normalize the input newTagNames to a consistent format and ensure uniqueness.
@@ -144,7 +146,7 @@ export async function syncItemTags(
     // The name fetched here is the one stored in the 'tags' table.
     const { data: currentItemTagRelations, error: currentTagsError } = await supabase
         .from('item_tags')
-        .select('tags (id, name)') // Select tag id and name via relation
+        .select('tags (id, name, team_id)') 
         .eq('item_id', itemId);
 
     if (currentTagsError) {
@@ -154,8 +156,13 @@ export async function syncItemTags(
 
     const currentTags: Tag[] = (currentItemTagRelations || [])
         .flatMap(itemRelation => {
-            // itemRelation.tags should be an array of Tag objects
-            return itemRelation.tags || [];
+            const relatedTags = itemRelation.tags;
+            if (Array.isArray(relatedTags)) {
+                return relatedTags;
+            } else if (relatedTags) {
+                return [relatedTags]; 
+            }
+            return []; 
         })
         .filter(tag => tag && typeof tag.id === 'string' && typeof tag.name === 'string');
 
@@ -175,10 +182,10 @@ export async function syncItemTags(
     // 4. Determine tags to link:
     // Tags from normalizedDesiredTagNames whose normalized names are NOT in normalizedCurrentTagNames.
     const tagNamesToFindOrCreateAndLink = normalizedDesiredTagNames.filter(
-        name => !normalizedCurrentTagNames.includes(name) // name is already normalized from normalizedDesiredTagNames
+        name => !normalizedCurrentTagNames.includes(name) 
     );
     if (tagNamesToFindOrCreateAndLink.length > 0) {
-        const tagIdsToLink = await findOrCreateTagsForUser(supabase, userId, tagNamesToFindOrCreateAndLink);
+        const tagIdsToLink = await findOrCreateTagsForTeam(supabase, teamId, modifierUserId, tagNamesToFindOrCreateAndLink);
         if (tagIdsToLink.length > 0) {
             await linkTagsToItem(supabase, itemId, tagIdsToLink);
         }

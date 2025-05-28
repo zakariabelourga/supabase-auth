@@ -287,7 +287,7 @@
 				{#if form?.error}
 					<p id="teamName-error" class="mt-2 text-sm text-red-600">{form.error}</p>
 				{/if}
-				{#if form?.success}
+				{#if form?.success && form?.teamName}
 					<p class="mt-2 text-sm text-green-600">Team "{form.teamName}" created successfully!</p>
 				{/if}
 			</div>

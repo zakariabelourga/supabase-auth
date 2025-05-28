@@ -2,21 +2,21 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Entity } from '$lib/types'; // Entity type from $lib/types
 
 /**
- * Fetches all entities for a given user, ordered by name.
+ * Fetches all entities for a given team, ordered by name.
  *
  * @param supabase - The Supabase client instance.
- * @param userId - The ID of the user whose entities are to be fetched.
+ * @param teamId - The ID of the team whose entities are to be fetched.
  * @returns A promise that resolves to an array of entities or throws an error.
  */
-export async function getEntitiesForUser(supabase: SupabaseClient, userId: string): Promise<Entity[]> {
+export async function getEntitiesForTeam(supabase: SupabaseClient, teamId: string): Promise<Entity[]> {
 	const { data, error } = await supabase
 		.from('entities')
-		.select('id, name, description, created_at') // Assuming description and created_at are part of the Entity type
-		.eq('user_id', userId)
+		.select('id, name, description, created_at, team_id, user_id') // Select all relevant fields including team_id and user_id (creator)
+		.eq('team_id', teamId) // Filter by team_id
 		.order('name');
 
 	if (error) {
-		console.error('Error fetching entities for user:', error);
+		console.error('Error fetching entities for team:', error);
 		// Re-throwing to be handled by the caller
 		throw error;
 	}
@@ -31,7 +31,8 @@ export interface CreateEntityPayload {
 
 export async function createEntity(
 	supabase: SupabaseClient,
-	userId: string,
+	teamId: string, // Changed from userId
+	creatorUserId: string, // Added for creator's ID
 	payload: CreateEntityPayload
 ): Promise<Entity> {
 	const { data, error } = await supabase
@@ -39,9 +40,10 @@ export async function createEntity(
 		.insert({
 			name: payload.name.trim(),
 			description: payload.description?.trim() || null,
-			user_id: userId
+			user_id: creatorUserId, // Set creator's ID
+			team_id: teamId // Set team's ID
 		})
-		.select('id, name, description, created_at') // Select the fields for the returned entity
+		.select('id, name, description, created_at, team_id, user_id') // Select all relevant fields
 		.single(); // Expect a single row back
 
 	if (error) {
@@ -60,7 +62,8 @@ export interface UpdateEntityPayload {
 
 export async function updateEntity(
 	supabase: SupabaseClient,
-	userId: string,
+	teamId: string, // Changed from userId
+	modifierUserId: string, // Added for modifier's ID
 	entityId: string,
 	payload: UpdateEntityPayload
 ): Promise<Entity> {
@@ -68,10 +71,12 @@ export async function updateEntity(
 		.from('entities')
 		.update({
 			name: payload.name.trim(),
-			description: payload.description?.trim() || null
+			description: payload.description?.trim() || null,
+			user_id: modifierUserId, // Update modifier's ID
+			updated_at: new Date().toISOString() // Explicitly set updated_at
 		})
-		.match({ id: entityId, user_id: userId })
-		.select('id, name, description, created_at')
+		.match({ id: entityId, team_id: teamId }) // Match on entityId and teamId
+		.select('id, name, description, created_at, team_id, user_id') // Select all relevant fields
 		.single();
 
 	if (error) {
@@ -79,8 +84,7 @@ export async function updateEntity(
 		throw error;
 	}
 	if (!data) {
-        // This case might happen if the entityId doesn't exist or doesn't belong to the user
-        // Or if the update didn't change any rows (though .single() might still error if no rows match)
+        // This case might happen if the entityId doesn't exist or doesn't belong to the team
         throw new Error('Entity not found or update failed.');
     }
 
@@ -89,13 +93,13 @@ export async function updateEntity(
 
 export async function deleteEntity(
 	supabase: SupabaseClient,
-	userId: string,
+	teamId: string, // Changed from userId
 	entityId: string
 ): Promise<void> {
 	const { error, count } = await supabase
 		.from('entities')
 		.delete()
-		.match({ id: entityId, user_id: userId });
+		.match({ id: entityId, team_id: teamId }); // Match on entityId and teamId
 
 	if (error) {
 		console.error('Error deleting entity:', error);
@@ -103,9 +107,8 @@ export async function deleteEntity(
 	}
 
     if (count === 0) {
-        // Optional: throw an error if no entity was deleted (e.g., wrong ID or not user's entity)
-        // This depends on desired behavior. For now, we'll consider it non-fatal if nothing matched.
-        console.warn(`Attempted to delete entity ${entityId} for user ${userId}, but no matching record found.`);
+        // Optional: throw an error if no entity was deleted (e.g., wrong ID or not team's entity)
+        console.warn(`Attempted to delete entity ${entityId} for team ${teamId}, but no matching record found.`);
     }
 	// No return value needed for delete, or could return a success boolean/count
 }
