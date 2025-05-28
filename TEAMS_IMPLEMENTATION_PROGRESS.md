@@ -156,9 +156,9 @@ This document summarizes the development progress for implementing the Teams fun
 
 2.  **Comprehensive Team & Member Management (from TF FR1.3, FR1.5.1, FR2.5, FR2.6, FR2.7, FR2.8):**
     *   **Team Settings:**
-        *   Implement a check for team name uniqueness per user during team creation and renaming, so that they can’t have multiple teams with the same name.
+        *   Implement a check for team name uniqueness per user during team creation and renaming, so that they can't have multiple teams with the same name.
         *   Define and implement a clear strategy for handling associated data (items, entities, tags, notes) when a team is deleted (e.g., prompt user to move team data to another team or delete team and associated data). This will likely involve updating the `deleteTeam` action and RLS.
-        A user can’t delete a team if it is the only one that he has, so that we can’t have orphaned users.
+        A user can't delete a team if it is the only one that he has, so that we can't have orphaned users.
     *   **Member Management (UI and Actions):**
         *   UI for Team Admins to change the roles of existing team members.
         *   UI for Team Admins to remove members from the team.
@@ -167,10 +167,18 @@ This document summarizes the development progress for implementing the Teams fun
         *   Implement logic to handle scenarios where the sole Admin/Owner attempts to leave the team or if their account is deleted (e.g., require ownership transfer or team deletion).
 
 3.  **Active Team Context Switching (from TF FR4.1-FR4.3):**
-    *   UI for users to select an "active" team context is already in the sidebar in app-sidebar.svelte and team-switcher.svelte.
-    *   Implement state management (e.g., Svelte store, potentially persisted in `localStorage`) for the `activeTeamId`.
-    *   Ensure all data displays (item lists, dashboards) and data creation forms are filtered by and associated with the `activeTeamId`.
-    *   Provide a clear visual indicator of the currently active team in the UI.
+    *   UI for users to select an "active" team context is already in the sidebar in `app-sidebar.svelte` and `team-switcher.svelte`.
+    *   **Refinements to `src/lib/components/sidebar/team-switcher.svelte`**:
+        *   Implemented a loading state (`isSwitching`) to provide visual feedback during the team switch API call and disable interaction with the switcher.
+        *   Integrated toast notifications (using `svelte-sonner` via `Toaster` in `app/+layout.svelte`) to provide clear user feedback on the success or failure of the team switching operation.
+        *   Corrected the API request payload in the `selectTeam` function to send `teamId` (camelCase) instead of `team_id` (snake_case), resolving "Invalid request body" errors from the `/app/api/team` endpoint.
+        *   Ensured the `isSwitching` state is correctly reset in both success and failure scenarios of the `selectTeam` function, and that HTML elements use the `disabled` attribute (not just `aria-disabled`) to prevent UI elements from remaining incorrectly disabled after an attempted switch.
+    *   Implemented state management (e.g., Svelte store, potentially persisted in `localStorage`) for the `activeTeamId`.
+        *   Created `src/lib/stores/teamStore.ts` which exports a readable Svelte store named `activeTeamStore`.
+        *   This store makes the `activeTeam` object (sourced from `page.data.activeTeam` via `$app/state` for Svelte 5 compatibility) reactively available to any client-side Svelte component.
+        *   The implementation uses an internal `writable` store updated by an `$effect` to bridge Svelte 5's rune-based reactivity with the traditional store pattern, allowing components to subscribe (e.g., using `$activeTeamStore`).
+        *   Ensure all data displays (item lists, dashboards) and data creation forms are filtered by and associated with the `activeTeamId`. (Server-side logic handles filtering; store aids UI confirmation).
+        *   Provide a clear visual indicator of the currently active team in the UI. (Partially addressed by TeamSwitcher display, can be expanded).
 
 4.  **New User Onboarding - Automatic Personal Team (from TF FR1.7):**
     *   Implement a mechanism (e.g., Supabase trigger on `auth.users` table insertion, or logic in the post-signup flow) to automatically create a "Personal Team" for every new user.
