@@ -83,7 +83,14 @@
 </script>
 
 <Sidebar.Provider>
-	<AppSidebar collapsible="icon" {user} {handleLogout} pages={pagesNavigation} />
+	<AppSidebar 
+		collapsible="icon" 
+		{user} 
+		{handleLogout} 
+		pages={pagesNavigation} 
+		teams={data.teams} 
+		activeTeam={data.activeTeam} 
+	/>
 	<Sidebar.Inset>
 		<header
 			class="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12"

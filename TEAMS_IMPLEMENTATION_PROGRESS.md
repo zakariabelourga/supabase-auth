@@ -199,117 +199,113 @@ This document summarizes the development progress for implementing the Teams fun
 
 ## Phase 2: Refactor Data Association to `team_id` (Items, Entities, Tags, Notes)
 
-This phase focuses on shifting the primary data association for core application entities from `user_id` to `team_id`, ensuring all data is correctly scoped within the active team context. The `user_id` column on these tables will be retained (e.g., for auditing "created by") but will no longer be the primary identifier for data segregation.
+**Objective**: Transition data scoping for core application entities (`items`, `tags`, `entities`, `item_notes`) from `user_id` to `team_id`, ensuring data is correctly associated with and filtered by the active team context.
 
-### 1. Objective
+**Status**: Largely Complete.
 
-*   Transition `items`, `tags`, `entities`, and `item_notes` to be primarily owned and scoped by `team_id`.
-*   Ensure `item_notes` are correctly associated with teams through their parent `item`'s `team_id`.
-*   All data operations (listing, creation, updates, deletion) for these entities must be filtered and authorized based on the user's `activeTeamId` and their role within that team.
-*   The `user_id` column on `items`, `entities`, `tags`, and `item_notes` will generally represent the "creator" or "last modifier" rather than the sole owner for data segregation.
+### 1. Database Interaction Layer (`src/lib/server/db/`)
 
-### 2. Scope of Changes
+*   **`items.ts`**:
+    *   All functions (e.g., `createItem`, `getItemsForUser`, `getItemById`, `updateItem`, `deleteItem`) refactored to accept `teamId` as a primary scoping parameter.
+    *   `creatorUserId` and `modifierUserId` retained where appropriate for authorship tracking.
+    *   **Status**: Completed.
+*   **`tags.ts`**:
+    *   Functions refactored to use `teamId` for scoping.
+    *   **Status**: Completed.
+*   **`entities.ts`**:
+    *   Functions refactored to use `teamId` for scoping.
+    *   **Status**: Completed.
+*   **`notes.ts` (targeting `item_notes` table)**:
+    *   Functions refactored to use `teamId` for scoping.
+    *   **Status**: Completed.
 
-*   **Database Interaction Functions (`src/lib/server/db/`)**:
-    *   **`items.ts`**:
-        *   Modify `listItemsForUser` (likely rename to `listItemsForTeam`), `createItem`, `updateItemWithRelations`, `deleteItemById`, and `getItemDetailById` (if it exists or is created) to accept `teamId` as a mandatory parameter.
-        *   Queries will need to filter by `.eq('team_id', teamId)`.
-        *   `createItem` and `updateItemWithRelations` must set the `team_id` on new/updated item records, in addition to `user_id` (for creator).
-        *   The `_resolveEntity` helper within `items.ts` will also need to consider `teamId` when looking up entities.
-    *   **`entities.ts`**:
-        *   Modify `getEntitiesForUser` (rename to `getEntitiesForTeam`), `createEntity`, `updateEntity`, and `deleteEntity` to accept and use `teamId`.
-        *   `createEntity` must set `team_id`.
-    *   **`tags.ts`**:
-        *   Modify `findOrCreateTagsForUser` (rename to `findOrCreateTagsForTeam`) and `syncItemTags` to operate within a specific `teamId`. Tags will become team-specific, not user-global.
-        *   `findOrCreateTagsForTeam` must set `team_id` on new tags.
-    *   **`notes.ts`**:
-        *   Functions like `addNoteToItem`, `deleteNoteById`, `updateNoteById` will need to ensure the parent `item` (identified by `itemId`) belongs to the `activeTeamId`. This check might involve an additional query or ensuring the `itemId` passed is already verified against the active team.
-        *   The `user_id` on `item_notes` will continue to represent the note's author. No `team_id` column exists on `item_notes`; association is indirect.
+### 2. SvelteKit Server-Side Logic (`src/routes/app/...`)
 
-*   **SvelteKit Server Logic (`src/routes/app/.../+page.server.ts` for items, entities, etc.)**:
-    *   Update `load` functions: Fetch the `activeTeamId` (from session, a store, or another established mechanism) and pass it to the updated database functions (e.g., `listItemsForTeam(supabase, activeTeamId)`).
-    *   Update `actions` (e.g., `addItem`, `addEntity`, `updateItem`, `deleteItem`):
-        *   Retrieve `activeTeamId`.
-        *   Pass `activeTeamId` to respective database CUD functions.
-        *   Ensure `session.user.id` is still passed for setting the creator/modifier `user_id`.
+*   **`app/items/+page.server.ts`**:
+    *   `load` function updated to fetch items based on `activeTeam.id`.
+    *   Actions (e.g., `createItem`) updated to pass `activeTeam.id` to database functions.
+    *   **Status**: Completed.
+*   **`app/items/[itemId]/+page.server.ts`**:
+    *   `load` function updated to fetch item details based on `activeTeam.id`.
+    *   Actions (e.g., `updateItem`, `addNote`) updated to use `activeTeam.id` for scoping and pass it to database functions.
+    *   **Status**: Completed.
+*   **`app/entities/+page.server.ts`**:
+    *   `load` function updated to fetch entities based on `activeTeam.id`.
+    *   Actions (e.g., `createEntity`) updated to pass `activeTeam.id` to database functions.
+    *   **Status**: Completed.
 
-*   **Frontend Components & Active Team Context**:
-    *   This refactoring is critically dependent on the "Active Team Context Switching" functionality (Phase 3 in `TEAMS_IMPLEMENTATION_PROGRESS.md`).
-    *   Frontend components initiating data operations must have access to the `activeTeamId` (e.g., from a Svelte store populated upon team selection).
-    *   Forms for creating items, entities, etc., will implicitly associate new data with the `activeTeamId` via the backend.
+### 3. Row Level Security (RLS) Policies
 
-*   **RLS Policies Review**:
-    *   The existing RLS policies for `items`, `entities`, `tags` (e.g., `USING (is_team_member(team_id, auth.uid()))`) are generally compatible, as they already expect a `team_id`.
-    *   The primary change is ensuring the application code *consistently provides* the correct `team_id` for these policies to evaluate correctly, especially for `INSERT` and `UPDATE` `WITH CHECK` conditions.
-    *   For `item_notes`, RLS will continue to rely on the user's access to the parent item.
+*   **`items`, `tags`, `entities`**:
+    *   Dropped old `user_id`-centric RLS policies.
+    *   Existing team-based RLS policies (e.g., `is_team_member(team_id, auth.uid())`) now correctly govern access based on `team_id`.
+    *   **Status**: Completed.
+*   **`item_tags` (Junction table for items and tags)**:
+    *   Dropped old `user_id`-centric RLS policies.
+    *   Access now governed by team membership related to linked items/tags (via policies on `items` and `tags`).
+    *   **Status**: Completed.
+*   **`item_notes`**:
+    *   Dropped old `user_id`-centric RLS policies.
+    *   Added comprehensive team-based RLS policies for `SELECT`, `INSERT`, `UPDATE`, `DELETE` based on team membership and roles (admin/editor).
+    *   Retained author-specific policies for modifications by the note creator.
+    *   **Status**: Completed.
 
-### 3. Data Integrity & `user_id` Column Usage
+### 4. Data Migration Considerations
 
-*   **`items.user_id`, `entities.user_id`, `tags.user_id`**: These will continue to be populated with `session.user.id` upon creation. For `items`, this `user_id` will signify the "creator" of the record, allowing this information (e.g., creator's name/avatar) to be displayed to other team members. For all these entities, `user_id` will no longer be the primary key for data scoping but rather an attribute indicating creation or last modification.
-*   **`item_notes.user_id`**: This will continue to represent the "author" of the note.
-*   **Data Migration**: The initial migration script associated existing data with a "Personal Team". Any data created *after* that migration but *before* this refactor (if `team_id` was nullable and not set by application logic) might need a one-time update to ensure `team_id` is populated, likely defaulting to the user's personal/primary team.
+*   The initial migration script associated existing data with a "Personal Team" for the primary user.
+*   **Note**: Application logic now consistently uses `team_id` for new data creation and queries, minimizing the risk of orphaned data.
+*   **Status**: Initial migration completed. Application logic updated.
 
-### 4. Dependencies on Other Phases
+### 5. Dependencies & Current State
 
-*   Successful implementation of this phase is heavily reliant on **Phase 3: Active Team Context Switching** being in place, as `activeTeamId` is a prerequisite for most changes described here. These two phases may need to be developed in close conjunction.
+*   The successful operation of this phase relies on the `activeTeam` context being correctly established and passed down from `hooks.server.ts` through the layout and page server files (addressed in Phase 3 UI fixes).
+*   With the database functions, server-side logic, and RLS policies updated, the backend is fully prepared for team-scoped data operations. Frontend components consuming this data must operate within the active team context.
 
-## Phase 2: Refactor Data Association to `team_id` (Items, Entities, Tags, Notes)
+## Phase 3: Frontend UI Integration & Fixes
 
-### 1. Database Schema & RLS Adjustments
+### 1. Team Switcher Data Flow Fixes
 
-*   **`items`, `entities`, `tags` Tables**:
-    *   The `team_id` column (added in Phase 1) is now the primary means of associating these records with a team.
-    *   The `user_id` column is used to identify the creator of the record.
-    *   **RLS Policies Updated**:
-        *   Removed old policies that granted access based solely on `user_id` (e.g., "Allow individual read access", "Allow individual insert access", etc.).
-        *   Existing team-based RLS policies (e.g., "Allow team members to view items", "Allow team editors and admins to create items") are now the primary controllers of access, using `team_id` and `get_user_role_in_team()` or `is_team_member()`.
-*   **`item_tags` Table (Junction Table)**:
-    *   Access to `item_tags` is implicitly controlled by access to the linked `items` and `tags` via their respective team-based RLS policies.
-    *   **RLS Policies Updated**:
-        *   Removed old policies that granted access based solely on the `user_id` of the associated item/tag creator (e.g., "Allow individual read access").
-*   **`item_notes` Table (Formerly referred to as `notes` in some RLS contexts)**:
-    *   The `item_id` column links a note to an item, which in turn has a `team_id`.
-    *   The `user_id` column on `item_notes` identifies the author of the note.
-    *   **RLS Policies Updated**:
-        *   Retained existing policies allowing authors direct CRUD access to their own notes (e.g., `USING (auth.uid() = user_id)`).
-        *   **Added new team-based policies**:
-            *   `SELECT`: "Allow team members to view item_notes for their team" - Allows any member of the item's team to view its notes.
-            *   `INSERT`: "Allow team editors and admins to create item_notes for their team" - Allows editors/admins of the item's team to add notes (author is set to `auth.uid()`).
-            *   `UPDATE`: "Allow team editors and admins to update item_notes in their team" - Allows editors/admins of the item's team to update any note on that item.
-            *   `DELETE`: "Allow team editors and admins to delete item_notes in their team" - Allows editors/admins of the item's team to delete any note on that item.
+**Objective**: Ensure `teams` and `activeTeam` data correctly flows from server-side load functions to the `TeamSwitcher` component to resolve the "Loading teams..." issue and display correct team information.
 
-### 2. Backend Code Refactoring (SvelteKit Server & DB Functions)
+**Files Modified & Key Changes:**
 
-*   **`src/lib/server/db/items.ts`**:
-    *   `listItemsForUser` -> `listItemsForTeam(supabase, teamId)`: Filters items by `team_id`.
-    *   `getItemByIdForUser` -> `getItemByIdForTeam(supabase, itemId, teamId)`: Fetches item ensuring it belongs to `teamId`.
-    *   `createItem`: Now requires `teamId` and `creatorUserId`.
-    *   `updateItemWithRelations`: Now requires `teamId` and `modifierUserId` in its payload.
-    *   `deleteItemById`: Now requires `teamId` to ensure the item belongs to the team before deletion (though RLS is primary enforcement).
-*   **`src/lib/server/db/tags.ts`**:
-    *   `findOrCreateTagsForUser` -> `findOrCreateTagsForTeam(supabase, teamId, creatorUserId, tagNames)`: Scopes tag creation/finding to `teamId`.
-    *   `syncItemTags`: Now requires `teamId` and `creatorUserId` (for new tags).
-*   **`src/lib/server/db/entities.ts`**:
-    *   `getEntitiesForUser` -> `getEntitiesForTeam(supabase, teamId)`: Filters entities by `team_id`.
-    *   `createEntity`: Now requires `teamId` and `creatorUserId`.
-    *   `updateEntity`: Now requires `teamId` and `modifierUserId`.
-    *   `deleteEntity`: Now requires `teamId`.
-*   **`src/lib/server/db/notes.ts` (operates on `item_notes` table)**:
-    *   `addNoteToItem`: Now requires `teamId` (to verify item's team) and `authorUserId` (for `item_notes.user_id`).
-    *   `deleteNoteById`, `updateNoteById`: Continue to use `userId` (author's ID) for direct note ownership checks, while team-level access is ensured by RLS and calling context (page `load` verifying item access via team).
+*   **`src/hooks.server.ts` (`activeTeamHook`)**: 
+    *   Confirmed to correctly load `teams` and `activeTeam` from Supabase based on user session and cookies.
+    *   Sets `event.locals.teams` and `event.locals.activeTeam`.
+    *   Extensive logging added and verified data population.
 
-### 3. Frontend SvelteKit `+page.server.ts` Refactoring
+*   **`src/routes/app/+layout.server.ts` (`load` function)**:
+    *   Confirmed to correctly receive `teams` and `activeTeam` from `event.locals`.
+    *   Returns this data for use in the corresponding `+layout.svelte`.
+    *   Logging added and verified data pass-through.
 
-*   **`src/routes/app/items/+page.server.ts`**:
-    *   `load`: Fetches items and entities using `activeTeam.id`.
-    *   `actions.addItem`, `actions.deleteItem`: Use `activeTeam.id` and pass `session.user.id` as `creatorUserId` or for validation where appropriate.
-*   **`src/routes/app/items/[itemId]/+page.server.ts`**:
-    *   `load`: Fetches item details and entities using `activeTeam.id`.
-    *   `actions.addNote`: Uses `activeTeam.id` (for item validation) and `session.user.id` as `authorUserId`.
-    *   `actions.updateItem`: Uses `activeTeam.id` and `session.user.id` as `modifierUserId`.
-    *   `actions.deleteNote`, `actions.updateNote`: Rely on `activeTeam.id` check for page access and `session.user.id` for note authorship checks in DB functions.
-*   **`src/routes/app/entities/+page.server.ts`**:
-    *   `load`: Fetches entities using `activeTeam.id`.
-    *   `actions.addEntity`, `actions.updateEntity`, `actions.deleteEntity`: Use `activeTeam.id` and pass `session.user.id` as `creatorUserId` or `modifierUserId` as appropriate.
+*   **`src/routes/app/+layout.svelte`**:
+    *   Previously, this component was not passing the `teams` and `activeTeam` (received from its `load` function via the `data` prop) to the `AppSidebar` component.
+    *   **Fix**: Modified to pass `data.teams` and `data.activeTeam` as props to `<AppSidebar />`.
+        ```svelte
+        <AppSidebar 
+            collapsible="icon" 
+            {user} 
+            {handleLogout} 
+            pages={pagesNavigation} 
+            teams={data.teams} 
+            activeTeam={data.activeTeam} 
+        />
+        ```
 
-### 4. Dependencies on Other Phases
+*   **`src/lib/components/sidebar/app-sidebar.svelte`**:
+    *   Previously, this component contained hardcoded mock data for `teams` and used that when rendering `TeamSwitcher`. It did not accept or pass `activeTeam`.
+    *   **Fixes**:
+        *   Removed the internal mock `data` object for teams.
+        *   Updated the component's props to accept `teams: Team[] | null | undefined` and `activeTeam: ActiveTeam | null | undefined`.
+        *   Modified the `TeamSwitcher` instantiation to pass these received props:
+            ```svelte
+            <TeamSwitcher {teams} {activeTeam} />
+            ```
+
+*   **`src/lib/components/sidebar/team-switcher.svelte`**:
+    *   Corrected Svelte 5 Runes syntax: removed `$effect` from imports as it's globally available. The import line is now `import { onMount } from 'svelte';`.
+    *   Props (`teams`, `activeTeam`) are received using `let { teams, activeTeam } = $props();`.
+    *   Client-side logging (`onMount`, `$effect`) was crucial in diagnosing that `activeTeam` was `undefined` and `teams` was showing mock data, leading to the identification of issues in parent components.
+
+**Outcome**: With these changes, the `TeamSwitcher` component now correctly receives and displays the actual `teams` and `activeTeam` data, resolving the persistent "Loading teams..." display and showing the correct user-specific team information.

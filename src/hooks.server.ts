@@ -99,67 +99,89 @@ const authGuard: Handle = async ({ event, resolve }) => {
 }
 
 const activeTeamHook: Handle = async ({ event, resolve }) => {
+  console.log('[Hooks] activeTeamHook: Starting');
   if (!event.locals.user || !event.locals.supabase) {
-    event.locals.teams = null
-    event.locals.activeTeam = null
-    return resolve(event)
+    console.log('[Hooks] activeTeamHook: No user or supabase in locals. Setting teams/activeTeam to null.');
+    event.locals.teams = null;
+    event.locals.activeTeam = null;
+    return resolve(event);
   }
 
-  const { user, supabase } = event.locals
-  let activeTeamIdFromCookie = event.cookies.get('active_team_id')
+  const { user, supabase } = event.locals;
+  console.log('[Hooks] activeTeamHook: User ID:', user.id);
+  let activeTeamIdFromCookie = event.cookies.get('active_team_id');
+  console.log('[Hooks] activeTeamHook: Active Team ID from cookie:', activeTeamIdFromCookie);
 
-  const teamsResult = await getAllTeamsForUser(supabase, user.id)
+  // Fetch all teams for the user
+  const teamsResult = await getAllTeamsForUser(supabase, user.id);
+  console.log('[Hooks] activeTeamHook: getAllTeamsForUser result:', JSON.stringify(teamsResult, null, 2));
+
   if (teamsResult.success && teamsResult.data) {
-    event.locals.teams = teamsResult.data
+    event.locals.teams = teamsResult.data;
+    console.log('[Hooks] activeTeamHook: event.locals.teams set to:', JSON.stringify(event.locals.teams, null, 2));
   } else {
-    event.locals.teams = []
-    console.error('Failed to fetch teams for user or no teams found:', teamsResult.error)
+    event.locals.teams = []; // Default to empty array if fetch fails or no teams
+    console.error('[Hooks] activeTeamHook: Failed to fetch teams or no teams found:', teamsResult.error);
+    console.log('[Hooks] activeTeamHook: event.locals.teams set to empty array.');
   }
 
-  let finalActiveTeam: ActiveTeam | null = null
+  let finalActiveTeam: ActiveTeam | null = null;
 
   if (event.locals.teams && event.locals.teams.length > 0) {
-    let targetTeam: Team | undefined = undefined
+    console.log('[Hooks] activeTeamHook: User has teams. Count:', event.locals.teams.length);
+    let targetTeam: Team | undefined = undefined;
 
     if (activeTeamIdFromCookie) {
-      targetTeam = event.locals.teams.find(t => t.id === activeTeamIdFromCookie)
+      targetTeam = event.locals.teams.find(t => t.id === activeTeamIdFromCookie);
+      console.log('[Hooks] activeTeamHook: Target team from cookie ID:', JSON.stringify(targetTeam, null, 2));
       if (!targetTeam) {
-        console.warn(`Active team ID ${activeTeamIdFromCookie} from cookie not found in user's teams. Clearing cookie.`)
-        event.cookies.delete('active_team_id', { path: '/' })
-        activeTeamIdFromCookie = undefined
+        console.warn(`[Hooks] activeTeamHook: Active team ID ${activeTeamIdFromCookie} from cookie not found in user's teams. Clearing cookie.`);
+        event.cookies.delete('active_team_id', { path: '/' });
+        activeTeamIdFromCookie = undefined; // Fall through to default selection
       }
     }
 
+    // If no valid active team from cookie, or cookie was cleared, try to set the first team as active
     if (!targetTeam) {
-      targetTeam = event.locals.teams[0]
+      console.log('[Hooks] activeTeamHook: No target team from cookie, or cookie cleared. Attempting to set default.');
+      targetTeam = event.locals.teams[0];
       if (targetTeam) {
-        console.log(`Setting first team ${targetTeam.id} as active by default.`)
+        console.log(`[Hooks] activeTeamHook: Setting first team ${targetTeam.id} as active by default.`);
         event.cookies.set('active_team_id', targetTeam.id, {
           path: '/',
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
           sameSite: 'lax',
-          maxAge: 60 * 60 * 24 * 30,
-        })
+          maxAge: 60 * 60 * 24 * 30, // 30 days
+        });
+      } else {
+        console.log('[Hooks] activeTeamHook: No teams available to set as default.');
       }
     }
 
     if (targetTeam) {
-      const roleResult = await getTeamMemberRole(supabase, targetTeam.id, user.id)
+      console.log('[Hooks] activeTeamHook: Final targetTeam to get role for:', JSON.stringify(targetTeam, null, 2));
+      const roleResult = await getTeamMemberRole(supabase, targetTeam.id, user.id);
+      console.log('[Hooks] activeTeamHook: getTeamMemberRole result:', JSON.stringify(roleResult, null, 2));
       if (roleResult.success && roleResult.data) {
         finalActiveTeam = {
           ...targetTeam,
-          role: roleResult.data as TeamRole,
-        }
+          role: roleResult.data as TeamRole 
+        };
       } else {
-        console.error(`Failed to get role for user ${user.id} in team ${targetTeam.id}:`, roleResult.error)
+        console.error(`[Hooks] activeTeamHook: Failed to get role for user ${user.id} in team ${targetTeam.id}:`, roleResult.error);
       }
     }
+  } else {
+    console.log('[Hooks] activeTeamHook: User has no teams (event.locals.teams is empty or null).');
   }
 
-  event.locals.activeTeam = finalActiveTeam
+  event.locals.activeTeam = finalActiveTeam;
+  console.log('[Hooks] activeTeamHook: event.locals.activeTeam set to:', JSON.stringify(event.locals.activeTeam, null, 2));
+  console.log('[Hooks] activeTeamHook: Ending');
 
-  return resolve(event)
-}
+  return resolve(event);
+};
+
 // Sequence the handlers
 export const handle: Handle = sequence(supabase, authGuard, activeTeamHook)
