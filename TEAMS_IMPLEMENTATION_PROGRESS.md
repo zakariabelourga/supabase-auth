@@ -26,7 +26,7 @@ This document summarizes the development progress for implementing the Teams fun
     *   `invited_by_user_id`: `uuid` (FK to `auth.users.id` `ON DELETE CASCADE`)
     *   `status`: `public.invitation_status` (Enum, Not Null, default: 'pending')
     *   `created_at`: `timestamptz` (default: `now()`)
-    *   `expires_at`: `timestamptz` (Nullable)
+    *   `accepted_at`: `timestamptz` (Nullable)
 
 **B. New ENUM Types Created:**
 
@@ -146,13 +146,21 @@ This document summarizes the development progress for implementing the Teams fun
 **Immediate Next Steps / Areas for Review & Refinement:**
 
 1.  **Full Invitation System & Notifications (Refined from TF FR2.1-FR2.3, FR2.2):**
-    *   Modify the `inviteUser` action to create records in the `team_invitations` table instead of directly adding to `team_members`.
-    *   Implement UI for users to view their pending invitations (e.g., in an account section or via a dedicated "Invitations" page/modal).
-    *   Create server actions and corresponding UI for users to `accept` or `decline` team invitations.
+    *   **COMPLETED:** Modified the `inviteUser` action in `src/routes/app/teams/+page.server.ts` to create records in the `team_invitations` table (including `role`) instead of directly adding to `team_members`. Checks for existing pending invitations are also in place.
+    *   **COMPLETED:** Implemented UI for users to view their pending invitations on a new dedicated page: `/app/invitations`.
+        *   The page `src/routes/app/invitations/+page.svelte` displays invitations (team name, role, date) and has been refactored to Svelte 5 Runes.
+        *   A navigation link to `/app/invitations` has been added to `src/routes/app/+layout.svelte`.
+    *   **COMPLETED:** Created server actions and corresponding UI for users to `accept` or `decline` team invitations.
+        *   `src/routes/app/invitations/+page.server.ts` handles:
+            *   `load`: Fetches pending invitations for the current user.
+            *   `acceptInvitation`: Adds the user to `team_members`, updates invitation status to 'accepted', and records `accepted_at`.
+            *   `declineInvitation`: Updates invitation status to 'declined'.
+        *   The `accepted_at` column was added to the `team_invitations` table schema and relevant TypeScript types.
+        *   TypeScript errors related to `session.user.email` possibly being undefined were resolved by adding checks.
     *   Integrate UI notifications (e.g., toasts/popups as per existing Next Step) for:
-        *   Receiving a new team invitation.
-        *   Successful/failed invitation acceptance/declination.
-        *   Confirmation when an admin sends an invitation.
+        *   Receiving a new team invitation. (Pending)
+        *   **COMPLETED:** Successful/failed invitation acceptance/declination. Implemented using `svelte-sonner` toast notifications in `src/routes/app/invitations/+page.svelte` triggered by an `$effect` monitoring form action results.
+        *   Confirmation when an admin sends an invitation. (Pending)
 
 2.  **Comprehensive Team & Member Management (from TF FR1.3, FR1.5.1, FR2.5, FR2.6, FR2.7, FR2.8):**
     *   **Team Settings:**

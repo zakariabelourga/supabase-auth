@@ -205,71 +205,99 @@ export const actions: Actions = {
 
     inviteUser: async ({ request, locals: { supabase, session } }) => {
         if (!session) {
-            return fail(401, { error: 'Unauthorized' });
-        }
+			return fail(401, { error: 'Unauthorized' });
+		}
 
-        const formData = await request.formData();
-        const teamId = formData.get('teamId') as string;
-        const userEmail = formData.get('userEmail') as string;
-        const role = formData.get('role') as TeamMember['role']; // 'admin', 'editor', or 'viewer'
+		const formData = await request.formData();
+		const teamId = formData.get('teamId') as string;
+		const userEmail = formData.get('userEmail') as string;
+		const role = formData.get('role') as TeamMember['role'];
 
-        if (!teamId || !userEmail || !role) {
-            return fail(400, { userEmail, role, error: 'Team ID, user email, and role are required.' });
-        }
+		if (!teamId || !userEmail || !role) {
+			return fail(400, { userEmail, role, error: 'Team ID, user email, and role are required.' });
+		}
 
-        if (!['editor', 'viewer', 'admin'].includes(role)) {
-            return fail(400, { userEmail, role, error: "Invalid role. Must be 'editor', 'viewer', or 'admin'." });
-        }
+		const trimmedUserEmail = userEmail.toLowerCase().trim();
 
-        // 1. Get the user ID from the email using the RPC function
-        const { data: invitedUserData, error: rpcError } = await supabase
-            .rpc('get_user_id_by_email', { email_text: userEmail.toLowerCase().trim() });
+		if (!['editor', 'viewer', 'admin'].includes(role)) {
+			return fail(400, { userEmail: trimmedUserEmail, role, error: "Invalid role. Must be 'editor', 'viewer', or 'admin'." });
+		}
 
-        if (rpcError || !invitedUserData) {
-            console.error('Error fetching user by email or user not found:', rpcError);
-            return fail(404, { userEmail, role, error: 'User with this email not found.' });
-        }
+		// 1. Attempt to get existing user ID from email (it's okay if not found)
+		let invitedUserId: string | null = null;
+		const { data: invitedUserData, error: rpcError } = await supabase
+			.rpc('get_user_id_by_email', { email_text: trimmedUserEmail });
 
-        const invitedUserId = invitedUserData as string; // RPC returns the UUID directly
+		if (rpcError && rpcError.message !== 'PGRST116') { // PGRST116: "Searched for a single row, but found no rows"
+			console.error('Error fetching user by email:', rpcError);
+			return fail(500, { userEmail: trimmedUserEmail, role, error: 'Error trying to verify email. Please try again.' });
+		}
+		if (invitedUserData) {
+			invitedUserId = invitedUserData as string; // RPC returns the UUID directly
+		}
 
-        if (invitedUserId === session.user.id) {
-            return fail(400, { userEmail, role, error: 'You cannot invite yourself to the team.'});
-        }
+		// 2. Perform checks if the email corresponds to an existing user
+		if (invitedUserId) {
+			// Check for self-invite
+			if (invitedUserId === session.user.id) {
+				return fail(400, { userEmail: trimmedUserEmail, role, error: 'You cannot invite yourself to the team.' });
+			}
 
-        // 2. Check if the user is already a member of the team
-        const { data: existingMember, error: checkMemberError } = await supabase
-            .from('team_members')
-            .select('team_id')
-            .eq('team_id', teamId)
-            .eq('user_id', invitedUserId)
-            .maybeSingle(); 
+			// Check if the user is already a member of the team
+			const { data: existingMember, error: checkMemberError } = await supabase
+				.from('team_members')
+				.select('team_id')
+				.eq('team_id', teamId)
+				.eq('user_id', invitedUserId)
+				.maybeSingle();
 
-        if (checkMemberError) {
-            console.error('Error checking existing member:', checkMemberError);
-            return fail(500, { userEmail, role, error: 'Could not verify team membership. Please try again.' });
-        }
+			if (checkMemberError) {
+				console.error('Error checking existing member:', checkMemberError);
+				return fail(500, { userEmail: trimmedUserEmail, role, error: 'Could not verify team membership. Please try again.' });
+			}
 
-        if (existingMember) {
-            return fail(409, { userEmail, role, error: 'This user is already a member of the team.' });
-        }
+			if (existingMember) {
+				return fail(409, { userEmail: trimmedUserEmail, role, error: 'This user is already a member of the team.' });
+			}
+		}
 
-        // 3. Add the user to the team_members table
-        const { error: insertMemberError } = await supabase
-            .from('team_members')
-            .insert({
-                team_id: teamId,
-                user_id: invitedUserId,
-                role: role
-            });
+		// 3. Check for an existing PENDING invitation for this email to this team
+		const { data: existingInvitation, error: checkInvitationError } = await supabase
+			.from('team_invitations')
+			.select('id')
+			.eq('team_id', teamId)
+			.eq('email_invited', trimmedUserEmail)
+			.eq('status', 'pending')
+			.maybeSingle();
 
-        if (insertMemberError) {
-            console.error('Error adding member to team:', insertMemberError);
-            if (insertMemberError.code === '42501') { // RLS violation on team_members insert
-                return fail(403, { userEmail, role, error: 'You do not have permission to add members to this team.' });
-            }
-            return fail(500, { userEmail, role, error: 'Failed to add user to the team. Please try again.' });
-        }
+		if (checkInvitationError) {
+			console.error('Error checking existing invitation:', checkInvitationError);
+			return fail(500, { userEmail: trimmedUserEmail, role, error: 'Could not verify existing invitations. Please try again.' });
+		}
 
-        return { success: true, message: `User ${userEmail} invited to the team as ${role}.`, teamId };
+		if (existingInvitation) {
+			return fail(409, { userEmail: trimmedUserEmail, role, error: 'An invitation for this email to this team is already pending.' });
+		}
+
+		// 4. Create an invitation in the team_invitations table
+		const { error: insertInviteError } = await supabase
+			.from('team_invitations')
+			.insert({
+				team_id: teamId,
+				email_invited: trimmedUserEmail,
+				invited_by_user_id: session.user.id,
+				role: role, // IMPORTANT: Assumes 'role' column exists/will be added to team_invitations table
+				// 'status' should default to 'pending' in the database schema
+			});
+
+		if (insertInviteError) {
+			console.error('Error creating team invitation:', insertInviteError);
+			if (insertInviteError.message.includes('permission denied') || insertInviteError.code === '42501' || insertInviteError.code === 'P0001') {
+				 return fail(403, { userEmail: trimmedUserEmail, role, error: 'You do not have permission to send invitations for this team.' });
+			}
+			return fail(500, { userEmail: trimmedUserEmail, role, error: 'Failed to send invitation. Please try again.' });
+		}
+
+		return { success: true, message: `Invitation sent to ${userEmail} for the role of ${role}.`, teamId };
     }
 }; 

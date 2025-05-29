@@ -94,7 +94,7 @@ export interface TeamInvitation {
     invited_by_user_id: string; // uuid, FK to auth.users.id
     status: InvitationStatus;
     created_at: string; // timestamptz
-    expires_at: string | null; // timestamptz
+    accepted_at: string | null; // timestamptz
     // Optional: include additional details if needed for UI
     // team?: { name?: string };
     // invited_by_user?: { email?: string };

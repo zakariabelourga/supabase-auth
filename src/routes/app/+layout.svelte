@@ -13,6 +13,7 @@
 	import TableProperties from "@lucide/svelte/icons/table-properties";
 	import Building2 from "@lucide/svelte/icons/building-2";
 	import Layers2 from "@lucide/svelte/icons/layers-2";
+	import Users from "@lucide/svelte/icons/users";
 
 	let { data, children } = $props();
 	let { supabase, session, user } = $derived(data);
@@ -50,6 +51,11 @@
 			name: "My Teams/Workspaces",
 			url: "/app/teams",
 			icon: Layers2,
+		},
+		{
+			name: "Invitations",
+			url: "/app/invitations",
+			icon: Users,
 		},
 	];
 
