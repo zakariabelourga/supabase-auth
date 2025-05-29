@@ -7,6 +7,7 @@
 	import type { ItemEntry as Item } from '$lib/types';
 	import { toast } from 'svelte-sonner';
 	import * as Table from '$lib/components/ui/table/index.js';
+	import { Trash2 } from '@lucide/svelte';
 
 	// Define FormActionData for this page's actions
 	interface AddItemFormValues {
@@ -133,7 +134,7 @@
 	</div>
 
 	{#if items.length > 0}
-		<div class="overflow-x-auto border rounded-lg">
+		<div class="overflow-x-auto rounded-lg border">
 			<Table.Root>
 				<Table.Header>
 					<Table.Row>
@@ -148,8 +149,10 @@
 				</Table.Header>
 				<Table.Body>
 					{#each items as item, i (item.id)}
-						<Table.Row class={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-							<Table.Cell class="font-medium">{item.name}</Table.Cell>
+						<Table.Row class={i % 2 === 0 ? 'bg-background' : 'bg-muted'}>
+							<Table.Cell class="font-medium">
+								<Button href={`/app/items/${item.id}`} variant="link" size="sm">{item.name}</Button>
+							</Table.Cell>
 							<Table.Cell>{item.description ?? '-'}</Table.Cell>
 							<Table.Cell>{getEntityDisplayName(item)}</Table.Cell>
 							<Table.Cell>{item.category?.name ?? '-'}</Table.Cell>
@@ -164,11 +167,6 @@
 							</Table.Cell>
 							<Table.Cell>{new Date(item.expiration).toLocaleDateString()}</Table.Cell>
 							<Table.Cell>
-								<a
-									href={`/app/items/${item.id}`}
-									class="inline-flex items-center rounded px-2 py-1 text-xs hover:bg-gray-100"
-									>View</a
-								>
 								<form
 									method="POST"
 									action="?/deleteItem"
@@ -181,12 +179,14 @@
 									}}
 								>
 									<input type="hidden" name="itemId" value={item.id} />
-									<button
+									<Button
 										type="submit"
-										class="inline-flex items-center rounded px-2 py-1 text-xs text-red-600 hover:bg-gray-100"
+										variant="ghost"
+										size="icon"
+										class="text-destructive hover:text-destructive/75"
 									>
-										Delete
-									</button>
+										<Trash2 />
+									</Button>
 								</form>
 							</Table.Cell>
 						</Table.Row>

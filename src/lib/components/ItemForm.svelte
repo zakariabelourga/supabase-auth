@@ -10,6 +10,7 @@
 	import EntityCombobox from '$lib/components/EntityCombobox.svelte';
 	import CategoryCombobox from '$lib/components/CategoryCombobox.svelte';
 	import type { Category, Entity, Tag, ItemEntry } from '$lib/types';
+	import { Check } from '@lucide/svelte';
 
 	// Define a type for the expected form result structure (can be more specific)
 	type ItemFormResult = ActionResult & {
@@ -145,7 +146,6 @@
 			bind:this={formRef}
 			class="py-4"
 		>
-
 			<!-- Hidden input for ID in edit mode -->
 			{#if isEditMode}
 				<input type="hidden" name="itemId" value={item?.id} />
@@ -228,6 +228,7 @@
 					{#if isSubmitting}
 						<Loader class="mr-2 animate-spin" />
 					{/if}
+					<Check />
 					{isSubmitting
 						? isEditMode
 							? 'Updating...'

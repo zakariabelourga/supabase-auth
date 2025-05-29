@@ -273,7 +273,7 @@
 												{#if isSubmittingNoteDelete === note.id}
 													<Loader class="size-4 animate-spin" />
 												{:else}
-													<Trash2 class="size-4" />
+													<Trash2 class="size-4 text-destructive" />
 												{/if}
 											</Button>
 										</form>
