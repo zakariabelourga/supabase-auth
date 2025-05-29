@@ -24,6 +24,7 @@ This document summarizes the development progress for implementing the Teams fun
     *   `team_id`: `uuid` (FK to `teams.id` `ON DELETE CASCADE`)
     *   `email_invited`: `text` (Not Null)
     *   `invited_by_user_id`: `uuid` (FK to `auth.users.id` `ON DELETE CASCADE`)
+    *   `role`: `public.team_role` (Enum, Not Null)
     *   `status`: `public.invitation_status` (Enum, Not Null, default: 'pending')
     *   `created_at`: `timestamptz` (default: `now()`)
     *   `accepted_at`: `timestamptz` (Nullable)
@@ -111,7 +112,7 @@ This document summarizes the development progress for implementing the Teams fun
     *   **`actions.inviteUser`**: Implemented to allow admins to invite users by email.
         *   Uses the `get_user_id_by_email` RPC.
         *   Checks if the user is already a member.
-        *   Adds the user to `team_members` (currently, direct add; `team_invitations` table usage to be reviewed).
+        *   Creates an invitation record in the `team_invitations` table (this was updated from a direct add, see 'Next Steps' section for completion details).
         *   Returns success/failure objects.
 
 ### 5. Frontend UI (`+page.svelte`)
@@ -130,7 +131,7 @@ This document summarizes the development progress for implementing the Teams fun
     *   `handleCreateSuccess` function for create team specific UI updates.
 *   **TypeScript/Linting**:
     *   `result: ActionResult` and `update` parameters in `use:enhance` callbacks are explicitly typed.
-    *   The `(form as any)?.error` type assertion is used in the template for admin action feedback to accommodate varying `ActionData` shapes while still allowing access to a potential `error` field.
+    *   The template directly uses the `form` prop (e.g., `form.error`, `form.message`) for feedback from admin actions, which is updated by SvelteKit.
 
 ## Current Status & Next Steps
 
@@ -138,7 +139,7 @@ This document summarizes the development progress for implementing the Teams fun
     *   Team creation is fully functional and secure.
     *   Team renaming by admins is implemented.
     *   Team deletion by admins is implemented (with cascading member removal).
-    *   User invitation by email (direct add to `team_members`) by admins is implemented.
+    *   User invitation by email (via the `team_invitations` table) by admins is implemented.
 *   **RLS Policies**: All relevant RLS policies are in a secure and functional state.
 *   **Frontend UI**: Basic UI for all implemented team management features is in place with feedback mechanisms.
 *   **TypeScript**: Major type errors have been resolved.
@@ -160,11 +161,11 @@ This document summarizes the development progress for implementing the Teams fun
     *   Integrate UI notifications (e.g., toasts/popups as per existing Next Step) for:
         *   Receiving a new team invitation. (Pending)
         *   **COMPLETED:** Successful/failed invitation acceptance/declination. Implemented using `svelte-sonner` toast notifications in `src/routes/app/invitations/+page.svelte` triggered by an `$effect` monitoring form action results.
-        *   Confirmation when an admin sends an invitation. (Pending)
+        *   Confirmation toast when an admin sends an invitation. (Pending - `teams/+page.svelte` currently shows inline form feedback but does not use a toast for this specific action).
 
 2.  **Comprehensive Team & Member Management (from TF FR1.3, FR1.5.1, FR2.5, FR2.6, FR2.7, FR2.8):**
     *   **Team Settings:**
-        *   Implement a check for team name uniqueness per user during team creation and renaming, so that they can't have multiple teams with the same name.
+        *   **COMPLETED:** Implement a check for team name uniqueness per user during team creation and renaming, so that they can't have multiple teams with the same name.
         *   Define and implement a clear strategy for handling associated data (items, entities, tags, notes) when a team is deleted (e.g., prompt user to move team data to another team or delete team and associated data). This will likely involve updating the `deleteTeam` action and RLS.
         A user can't delete a team if it is the only one that he has, so that we can't have orphaned users.
     *   **Member Management (UI and Actions):**
