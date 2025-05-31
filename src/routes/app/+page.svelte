@@ -1,4 +1,5 @@
 <script lang="ts">
+    import PageHeader from '$lib/components/PageHeader.svelte';
     // You can optionally load data specific to this page here if needed
     // import type { PageData } from './$types';
     // let { data }: { data: PageData } = $props();
@@ -8,9 +9,11 @@
     <title>Dashboard</title>
 </svelte:head>
 
+
+<PageHeader title="Dashboard">
+</PageHeader>
 <div class="">
-    <h1 class="text-3xl font-bold mb-4">Private Dashboard</h1>
-    <p class="mb-2">Welcome to the protected area!</p>
+    <p class="mb-2 mt-6">Welcome to the protected area!</p>
     <p class="mb-6">You are successfully logged in.</p>
     
     <p class="mb-2">Manage your account details:</p>

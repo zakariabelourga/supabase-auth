@@ -8,6 +8,7 @@
 	import { toast } from 'svelte-sonner';
 	import * as Table from '$lib/components/ui/table/index.js';
 	import { Trash2 } from '@lucide/svelte';
+	import PageHeader from '$lib/components/PageHeader.svelte';
 
 	// Define FormActionData for this page's actions
 	interface AddItemFormValues {
@@ -121,83 +122,76 @@
 	onOpenChange={handleAddDialogOpenChange}
 />
 
-<div class="">
-	<div class="mb-6 flex items-center justify-between">
-		<h1 class="text-3xl font-bold">My Expiration Items</h1>
-		<Button
-			variant="default"
-			onclick={() => (showAddDialog = true)}
-			class="flex items-center gap-2"
-		>
-			<PlusCircle class="size-4" /> Add New Item
-		</Button>
-	</div>
+<PageHeader title="All Items">
+	<Button variant="default" onclick={() => (showAddDialog = true)} class="flex items-center gap-2">
+		<PlusCircle class="size-4" /> Add New Item
+	</Button>
+</PageHeader>
 
-	{#if items.length > 0}
-		<div class="overflow-x-auto rounded-lg border">
-			<Table.Root>
-				<Table.Header>
-					<Table.Row>
-						<Table.Head class="">Name</Table.Head>
-						<Table.Head>Description</Table.Head>
-						<Table.Head>Provider/Entity</Table.Head>
-						<Table.Head>Category</Table.Head>
-						<Table.Head>Tags</Table.Head>
-						<Table.Head>Expires On</Table.Head>
-						<Table.Head>Actions</Table.Head>
-					</Table.Row>
-				</Table.Header>
-				<Table.Body>
-					{#each items as item, i (item.id)}
-						<Table.Row class={i % 2 === 0 ? 'bg-background' : 'bg-muted'}>
-							<Table.Cell class="font-medium">
-								<Button href={`/app/items/${item.id}`} variant="link" size="sm">{item.name}</Button>
-							</Table.Cell>
-							<Table.Cell>{item.description ?? '-'}</Table.Cell>
-							<Table.Cell>{getEntityDisplayName(item)}</Table.Cell>
-							<Table.Cell>{item.category?.name ?? '-'}</Table.Cell>
-							<Table.Cell>
-								{#if item.tags && item.tags.length > 0}
-									{#each item.tags as tag (tag.id)}
-										<span class="mr-1">{tag.name}</span>
-									{/each}
-								{:else}
-									-
-								{/if}
-							</Table.Cell>
-							<Table.Cell>{new Date(item.expiration).toLocaleDateString()}</Table.Cell>
-							<Table.Cell>
-								<form
-									method="POST"
-									action="?/deleteItem"
-									use:enhance
-									style="display: inline;"
-									onsubmit={() => {
-										if (!confirm('Are you sure you want to delete this item?')) {
-											return false; // Prevent submission
-										}
-									}}
+{#if items.length > 0}
+	<div class="overflow-x-auto rounded-lg border">
+		<Table.Root>
+			<Table.Header>
+				<Table.Row>
+					<Table.Head class="">Name</Table.Head>
+					<Table.Head>Description</Table.Head>
+					<Table.Head>Provider/Entity</Table.Head>
+					<Table.Head>Category</Table.Head>
+					<Table.Head>Tags</Table.Head>
+					<Table.Head>Expires On</Table.Head>
+					<Table.Head>Actions</Table.Head>
+				</Table.Row>
+			</Table.Header>
+			<Table.Body>
+				{#each items as item, i (item.id)}
+					<Table.Row class={i % 2 === 0 ? 'bg-background' : 'bg-muted'}>
+						<Table.Cell class="font-medium">
+							<Button href={`/app/items/${item.id}`} variant="link" size="sm">{item.name}</Button>
+						</Table.Cell>
+						<Table.Cell>{item.description ?? '-'}</Table.Cell>
+						<Table.Cell>{getEntityDisplayName(item)}</Table.Cell>
+						<Table.Cell>{item.category?.name ?? '-'}</Table.Cell>
+						<Table.Cell>
+							{#if item.tags && item.tags.length > 0}
+								{#each item.tags as tag (tag.id)}
+									<span class="mr-1">{tag.name}</span>
+								{/each}
+							{:else}
+								-
+							{/if}
+						</Table.Cell>
+						<Table.Cell>{new Date(item.expiration).toLocaleDateString()}</Table.Cell>
+						<Table.Cell>
+							<form
+								method="POST"
+								action="?/deleteItem"
+								use:enhance
+								style="display: inline;"
+								onsubmit={() => {
+									if (!confirm('Are you sure you want to delete this item?')) {
+										return false; // Prevent submission
+									}
+								}}
+							>
+								<input type="hidden" name="itemId" value={item.id} />
+								<Button
+									type="submit"
+									variant="ghost"
+									size="icon"
+									class="text-destructive hover:text-destructive/75"
 								>
-									<input type="hidden" name="itemId" value={item.id} />
-									<Button
-										type="submit"
-										variant="ghost"
-										size="icon"
-										class="text-destructive hover:text-destructive/75"
-									>
-										<Trash2 />
-									</Button>
-								</form>
-							</Table.Cell>
-						</Table.Row>
-					{/each}
-				</Table.Body>
-			</Table.Root>
-		</div>
-	{:else}
-		<div class="rounded-lg border bg-muted/30 p-10 text-center">
-			<p class="mb-4 text-muted-foreground">You haven't added any items yet.</p>
-			<Button variant="outline" onclick={() => (showAddDialog = true)}>Add Your First Item</Button>
-		</div>
-	{/if}
-</div>
+									<Trash2 />
+								</Button>
+							</form>
+						</Table.Cell>
+					</Table.Row>
+				{/each}
+			</Table.Body>
+		</Table.Root>
+	</div>
+{:else}
+	<div class="rounded-lg border bg-muted/30 p-10 text-center">
+		<p class="mb-4 text-muted-foreground">You haven't added any items yet.</p>
+		<Button variant="outline" onclick={() => (showAddDialog = true)}>Add Your First Item</Button>
+	</div>
+{/if}
