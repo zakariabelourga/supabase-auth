@@ -79,10 +79,10 @@
 	<title>Your Teams</title>
 </svelte:head>
 
-<PageHeader title="Teams/Workspaces"></PageHeader>
+<PageHeader title="Teams/Workspaces" count={data.teams?.length}></PageHeader>
 
 {#if data.teams && data.teams.length > 0}
-	<ul class="mb-8 mt-6 space-y-6">
+	<ul class="mb-8 space-y-6">
 		{#each data.teams as team (team.id)}
 			<li class="rounded-lg border bg-white p-4 shadow transition-shadow hover:shadow-md">
 				<div class="flex items-start justify-between">

@@ -122,7 +122,7 @@
 	onOpenChange={handleAddDialogOpenChange}
 />
 
-<PageHeader title="All Items">
+<PageHeader title="All Items" count={items.length}>
 	<Button variant="default" onclick={() => (showAddDialog = true)} class="flex items-center gap-2">
 		<PlusCircle class="size-4" /> Add New Item
 	</Button>

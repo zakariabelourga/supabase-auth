@@ -18,7 +18,7 @@
 	});
 </script>
 
-<PageHeader title="Your Pending Invitations"></PageHeader>
+<PageHeader title="Your Pending Invitations" count={data.pendingInvitations?.length}></PageHeader>
 
 {#if data.pendingInvitations && data.pendingInvitations.length > 0}
 	<ul class="mt-6 space-y-4">

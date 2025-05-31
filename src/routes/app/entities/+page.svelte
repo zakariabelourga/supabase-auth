@@ -79,7 +79,7 @@
 	<title>My Entities</title>
 </svelte:head>
 
-<PageHeader title="All Entities/Providers">
+<PageHeader title="All Entities/Providers" count={entities.length}>
 	<Button
 		variant="default"
 		onclick={() => {
