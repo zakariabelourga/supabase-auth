@@ -60,7 +60,7 @@
 	} = $props();
 </script>
 
-<Sidebar.Root bind:ref {collapsible} {...restProps}>
+<Sidebar.Root variant="inset" bind:ref {collapsible} {...restProps}>
 	<Sidebar.Header>
 		<TeamSwitcher {teams} {activeTeam} />
 	</Sidebar.Header>

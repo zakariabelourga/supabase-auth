@@ -20,10 +20,10 @@
 	<Sidebar.Menu>
 		{#each pages as item (item.name)} 
 			<Sidebar.MenuItem>
-				<Sidebar.MenuButton isActive={page.url.pathname === item.url}>
+				<Sidebar.MenuButton size="lg" isActive={page.url.pathname === item.url}>
 					{#snippet child({ props })}
 						<a href={item.url} {...props}>
-							<item.icon />
+							<item.icon class="!size-[21px] mr-2.5 ml-1" />
 							<span>{item.name}</span>
 						</a>
 					{/snippet}
